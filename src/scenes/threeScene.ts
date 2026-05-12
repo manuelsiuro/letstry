@@ -247,8 +247,37 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const cheeseWheelGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.1, 16);
   const flameGeo = new THREE.SphereGeometry(0.12, 8, 6);
   const smokeGeo = new THREE.SphereGeometry(0.09, 6, 5);
-  const armGeo = new THREE.BoxGeometry(0.18, 0.08, 0.18);
-  const starSphereGeo = new THREE.SphereGeometry(0.07, 8, 6);
+  const marketingStarGeo = new THREE.OctahedronGeometry(0.1, 0);
+
+  // Robot-arm shared geometries (reused across all oven arms)
+  const armMountGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.06, 8);
+  const armUpperGeo = new THREE.BoxGeometry(0.06, 0.22, 0.06);
+  const armElbowGeo = new THREE.SphereGeometry(0.04, 8, 6);
+  const armForearmGeo = new THREE.BoxGeometry(0.05, 0.18, 0.05);
+  const armPincerGeo = new THREE.BoxGeometry(0.02, 0.06, 0.02);
+  // Pivot upper segment from its TOP so it hangs down from the mount
+  armUpperGeo.translate(0, -0.11, 0);
+  // Pivot forearm from its TOP (elbow) so rotation pivots at the elbow
+  armForearmGeo.translate(0, -0.09, 0);
+
+  // Bike shared geometries
+  const bikeWheelGeo = new THREE.TorusGeometry(0.16, 0.04, 6, 16);
+  const bikeFrameGeo = new THREE.BoxGeometry(0.05, 0.18, 0.5);
+  const bikeBarGeo = new THREE.BoxGeometry(0.22, 0.04, 0.04);
+  const bikeSeatGeo = new THREE.BoxGeometry(0.1, 0.04, 0.12);
+  const bikeBoxGeo = new THREE.BoxGeometry(0.18, 0.06, 0.18);
+
+  // Drone shared geometries
+  const droneBodyGeo = new THREE.BoxGeometry(0.12, 0.05, 0.12);
+  const droneArmGeo = new THREE.BoxGeometry(0.32, 0.02, 0.02);
+  const droneRotorGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.01, 8);
+  const dronePayloadGeo = new THREE.BoxGeometry(0.08, 0.04, 0.08);
+
+  // New shared materials
+  const matBlack = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7 });
+  const matBike = new THREE.MeshStandardMaterial({ color: 0x4cc9f0, emissive: 0x224488, emissiveIntensity: 0.3, roughness: 0.5 });
+  const matDroneBody = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, emissive: 0x4cc9f0, emissiveIntensity: 0.25, roughness: 0.6 });
+  const matRotor = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, emissive: 0x4cc9f0, emissiveIntensity: 0.4, roughness: 0.5 });
 
   // dough ball — hovers in front of chef, visible when `dough` owned
   const doughBall = new THREE.Mesh(doughGeo, matCream);
@@ -277,10 +306,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   marketingGroup.rotation.x = -0.35; // tilted ring
   marketingGroup.visible = false;
   shopLayer.add(marketingGroup);
-  const starMat = new THREE.MeshStandardMaterial({ color: 0xffd54a, emissive: 0xffaa22, emissiveIntensity: 0.9, roughness: 0.4 });
+  const starMat = new THREE.MeshStandardMaterial({ color: 0xffd54a, emissive: 0xffd54a, emissiveIntensity: 1.2, roughness: 0.4 });
   const marketingStars: THREE.Mesh[] = [];
   for (let i = 0; i < 8; i++) {
-    const s = new THREE.Mesh(starSphereGeo, starMat);
+    const s = new THREE.Mesh(marketingStarGeo, starMat);
     s.userData.phase = (i / 8) * Math.PI * 2;
     marketingGroup.add(s);
     marketingStars.push(s);
@@ -289,10 +318,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // Per-oven dynamic props (flame, smoke, bot-arm) — maintained alongside `ovens[]`
   const flameMat = new THREE.MeshStandardMaterial({ color: 0xff7722, emissive: 0xff4400, emissiveIntensity: 1.2, roughness: 0.3 });
   const smokeMat = new THREE.MeshStandardMaterial({ color: 0x888888, transparent: true, opacity: 0.5, roughness: 1 });
-  const botArmMat = new THREE.MeshStandardMaterial({ color: 0x444a55, emissive: 0x4cc9f0, emissiveIntensity: 0.4, roughness: 0.5 });
+  const botArmMat = new THREE.MeshStandardMaterial({ color: 0x444a55, roughness: 0.5 });
+  const botArmJointMat = new THREE.MeshStandardMaterial({ color: 0x4cc9f0, emissive: 0x4cc9f0, emissiveIntensity: 0.5, roughness: 0.4 });
 
   type SmokePuff = { mesh: THREE.Mesh; offset: number };
-  type OvenProps = { flame: THREE.Mesh; smoke: SmokePuff[]; arm: THREE.Mesh };
+  type OvenProps = { flame: THREE.Mesh; smoke: SmokePuff[]; arm: THREE.Group };
   const ovenProps: OvenProps[] = [];
   function makeOvenProps(oven: THREE.Mesh): OvenProps {
     const flame = new THREE.Mesh(flameGeo, flameMat);
@@ -307,11 +337,42 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       shopLayer.add(s);
       smoke.push({ mesh: s, offset: i / 3 });
     }
-    const arm = new THREE.Mesh(armGeo, botArmMat);
-    arm.position.set(oven.position.x, 1.75, oven.position.z + 0.2);
+    const arm = makeRobotArm();
+    arm.position.set(oven.position.x, 1.95, oven.position.z + 0.2);
     arm.visible = false;
     shopLayer.add(arm);
     return { flame, smoke, arm };
+  }
+  function makeRobotArm(): THREE.Group {
+    const g = new THREE.Group();
+    // Ceiling mount at top of group (y=0 is the anchor / "ceiling" point)
+    const mount = new THREE.Mesh(armMountGeo, matDark);
+    mount.position.y = -0.03; // half-height so its top sits at y=0
+    g.add(mount);
+    // Upper segment hangs down from below the mount; geo is pivot-at-top
+    const upper = new THREE.Mesh(armUpperGeo, botArmMat);
+    upper.position.y = -0.06;
+    g.add(upper);
+    // Elbow joint at the bottom of the upper segment
+    const elbowY = -0.06 - 0.22;
+    const elbow = new THREE.Mesh(armElbowGeo, botArmJointMat);
+    elbow.position.y = elbowY;
+    g.add(elbow);
+    // Forearm angled forward (~30deg) from the elbow; pivot-at-top
+    const forearm = new THREE.Mesh(armForearmGeo, botArmMat);
+    forearm.position.y = elbowY;
+    forearm.rotation.x = Math.PI / 6; // 30deg forward
+    g.add(forearm);
+    // Pincer: two short bars at the tip of the forearm
+    const tipY = elbowY - Math.cos(Math.PI / 6) * 0.18;
+    const tipZ = Math.sin(Math.PI / 6) * 0.18;
+    const pincerL = new THREE.Mesh(armPincerGeo, matDark);
+    pincerL.position.set(-0.025, tipY - 0.03, tipZ);
+    g.add(pincerL);
+    const pincerR = new THREE.Mesh(armPincerGeo, matDark);
+    pincerR.position.set(0.025, tipY - 0.03, tipZ);
+    g.add(pincerR);
+    return g;
   }
   function disposeOvenProps(p: OvenProps): void {
     shopLayer.remove(p.flame);
@@ -325,12 +386,34 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // ---- Local layer (bikes orbiting) ----
   const localLayer = new THREE.Group();
   scene.add(localLayer);
-  const bikes: THREE.Mesh[] = [];
+  const bikes: THREE.Group[] = [];
   function spawnBike(): void {
-    const bike = new THREE.Mesh(
-      new THREE.BoxGeometry(0.35, 0.25, 0.7),
-      new THREE.MeshStandardMaterial({ color: 0x4cc9f0, emissive: 0x224488, emissiveIntensity: 0.3 }),
-    );
+    const bike = new THREE.Group();
+    // Wheels — torus in XY plane so the disc faces sideways (perpendicular to bike's z-forward)
+    const wheelFront = new THREE.Mesh(bikeWheelGeo, matBlack);
+    wheelFront.rotation.y = Math.PI / 2;
+    wheelFront.position.set(0, 0.16, 0.25);
+    bike.add(wheelFront);
+    const wheelBack = new THREE.Mesh(bikeWheelGeo, matBlack);
+    wheelBack.rotation.y = Math.PI / 2;
+    wheelBack.position.set(0, 0.16, -0.25);
+    bike.add(wheelBack);
+    // Frame between wheels
+    const frame = new THREE.Mesh(bikeFrameGeo, matBike);
+    frame.position.set(0, 0.16, 0);
+    bike.add(frame);
+    // Handlebar near front
+    const handle = new THREE.Mesh(bikeBarGeo, matDark);
+    handle.position.set(0, 0.3, 0.22);
+    bike.add(handle);
+    // Seat at back top
+    const seat = new THREE.Mesh(bikeSeatGeo, matDark);
+    seat.position.set(0, 0.3, -0.2);
+    bike.add(seat);
+    // Pizza box on back rack
+    const pizzaBox = new THREE.Mesh(bikeBoxGeo, matRed);
+    pizzaBox.position.set(0, 0.27, -0.25);
+    bike.add(pizzaBox);
     localLayer.add(bike);
     bikes.push(bike);
   }
@@ -383,16 +466,37 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   );
   cosmicLayer.add(stars);
 
-  const drones: THREE.Mesh[] = [];
+  type Drone = THREE.Group & { userData: { angle: number; radius: number; speed: number; tilt: number; rotors: THREE.Mesh[] } };
+  const drones: Drone[] = [];
   function spawnDrone(): void {
-    const d = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 0.1, 0.28),
-      new THREE.MeshStandardMaterial({ color: 0xffe7b8, emissive: 0xffaa44, emissiveIntensity: 0.7 }),
-    );
+    const d = new THREE.Group() as Drone;
+    // Central body
+    const body = new THREE.Mesh(droneBodyGeo, matDroneBody);
+    d.add(body);
+    // Two crossed arms in XZ plane
+    const armA = new THREE.Mesh(droneArmGeo, matDark);
+    d.add(armA);
+    const armB = new THREE.Mesh(droneArmGeo, matDark);
+    armB.rotation.y = Math.PI / 2;
+    d.add(armB);
+    // Four rotors at the tips of the arms (arm length 0.32 -> tip at 0.16)
+    const tipOffsets: Array<[number, number]> = [[0.16, 0], [-0.16, 0], [0, 0.16], [0, -0.16]];
+    const rotors: THREE.Mesh[] = [];
+    for (const [rx, rz] of tipOffsets) {
+      const r = new THREE.Mesh(droneRotorGeo, matRotor);
+      r.position.set(rx, 0.02, rz);
+      d.add(r);
+      rotors.push(r);
+    }
+    // Pizza-box payload slung underneath
+    const payload = new THREE.Mesh(dronePayloadGeo, matRed);
+    payload.position.set(0, -0.05, 0);
+    d.add(payload);
     d.userData.angle = Math.random() * Math.PI * 2;
     d.userData.radius = 1.8 + Math.random() * 1.2;
     d.userData.speed = 0.6 + Math.random() * 0.5;
     d.userData.tilt = Math.random() * 0.6 - 0.3;
+    d.userData.rotors = rotors;
     cosmicLayer.add(d);
     drones.push(d);
   }
@@ -443,7 +547,6 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     while (bikes.length > desiredBikes) {
       const b = bikes.pop()!;
       localLayer.remove(b);
-      b.geometry.dispose();
     }
 
     // second chef if kitchen upgrade
@@ -498,7 +601,6 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     while (drones.length > desiredDrones) {
       const d = drones.pop()!;
       cosmicLayer.remove(d);
-      d.geometry.dispose();
     }
 
     // phase visibility
@@ -611,7 +713,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         m.opacity = (1 - t) * 0.5;
       }
       if (p.arm.visible) {
-        p.arm.position.y = 1.75 + Math.sin(elapsed * 4 + p.arm.position.x * 3) * 0.12;
+        p.arm.position.y = 1.95 + Math.sin(elapsed * 4 + p.arm.position.x * 3) * 0.12;
         p.arm.rotation.y = Math.sin(elapsed * 3 + p.arm.position.x) * 0.5;
       }
     }
@@ -622,6 +724,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         s.position.set(Math.cos(a) * 1.6, 0, Math.sin(a) * 1.6);
         const pop = 1 + Math.sin(elapsed * 3 + (s.userData.phase as number)) * 0.1;
         s.scale.setScalar(pop);
+        s.rotation.y += dt * 2;
       }
       marketingGroup.position.z = 0.3 + Math.sin(elapsed * 0.6) * 0.1;
     }
@@ -679,6 +782,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         const tilt = d.userData.tilt;
         d.position.set(Math.cos(a) * r, tilt + Math.sin(a * 2) * 0.2, Math.sin(a) * r);
         d.rotation.y = -a + Math.PI / 2;
+        for (const rot of d.userData.rotors) rot.rotation.y += dt * 30;
       }
     }
 
