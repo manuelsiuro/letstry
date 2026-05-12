@@ -3,6 +3,7 @@ import { UPGRADES, canAfford, isUnlocked, type UpgradeDef } from "../game/upgrad
 import { fmt, fmtMoney, fmtInt } from "../game/format";
 import { sfxClick, sfxSell, sfxBuy, sfxPhase, sfxTranscend, toggleMute, isMuted } from "../audio/sfx";
 import { clearSave } from "../game/save";
+import { iconImg, iconHtml, type IconName } from "./icons";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -17,11 +18,13 @@ interface StatRow {
   label: HTMLElement;
 }
 
-function makeStat(labelText: string, id: string): StatRow {
+function makeStat(labelText: string, id: string, icon?: IconName): StatRow {
   const root = el("div", "stat");
   root.id = "stat-" + id;
   const value = el("div", "stat-value", "0");
-  const label = el("div", "stat-label", labelText);
+  const label = el("div", "stat-label");
+  if (icon) label.appendChild(iconImg(icon, "ui-icon ui-icon-sm"));
+  label.appendChild(document.createTextNode(icon ? " " + labelText : labelText));
   root.appendChild(value);
   root.appendChild(label);
   return { root, value, label };
@@ -35,11 +38,11 @@ export function mountHud(): void {
   const topBar = el("div");
   topBar.id = "hud-top";
 
-  const stMoney = makeStat("$", "money");
-  const stStock = makeStat("🍕 stock", "stock");
-  const stRep = makeStat("⭐ rep", "rep");
-  const stCosmic = makeStat("✨ cosmic", "cosmic");
-  const stSlices = makeStat("🌀 slices", "slices");
+  const stMoney = makeStat("$", "money", "dollar");
+  const stStock = makeStat("stock", "stock", "pizza");
+  const stRep = makeStat("rep", "rep", "star");
+  const stCosmic = makeStat("cosmic", "cosmic", "cosmic");
+  const stSlices = makeStat("slices", "slices", "swirl");
 
   topBar.append(stMoney.root, stStock.root, stRep.root, stCosmic.root, stSlices.root);
   root.appendChild(topBar);
@@ -65,12 +68,19 @@ export function mountHud(): void {
   // Buttons column
   const buttonCol = el("div");
   buttonCol.id = "button-col";
-  const btnMake = el("button", "btn btn-make", "🍕 Make Pizza");
+  const btnMake = el("button", "btn btn-make");
   btnMake.id = "btn-make";
-  const btnSell = el("button", "btn btn-sell", "💵 Sell 1");
+  btnMake.append(iconImg("pizza", "ui-icon ui-icon-btn"), document.createTextNode(" Make Pizza"));
+  const btnSell = el("button", "btn btn-sell");
   btnSell.id = "btn-sell";
-  const btnTranscend = el("button", "btn btn-transcend", "✨ BECOME THE PIZZA ✨");
+  btnSell.append(iconImg("money", "ui-icon ui-icon-btn"), document.createTextNode(" Sell 1"));
+  const btnTranscend = el("button", "btn btn-transcend");
   btnTranscend.id = "btn-transcend";
+  btnTranscend.append(
+    iconImg("cosmic", "ui-icon ui-icon-btn"),
+    document.createTextNode(" BECOME THE PIZZA "),
+    iconImg("cosmic", "ui-icon ui-icon-btn"),
+  );
   btnTranscend.style.display = "none";
   buttonCol.append(btnMake, btnSell, btnTranscend);
   bottomBar.appendChild(buttonCol);
@@ -80,8 +90,9 @@ export function mountHud(): void {
   // Corner menu
   const cornerMenu = el("div");
   cornerMenu.id = "corner-menu";
-  const btnMute = el("button", "icon-btn", "🔊");
+  const btnMute = el("button", "icon-btn icon-btn-img");
   btnMute.title = "mute";
+  btnMute.appendChild(iconImg("audio-on", "ui-icon ui-icon-corner"));
   const btnReset = el("button", "icon-btn", "↻");
   btnReset.title = "reset save";
   cornerMenu.append(btnMute, btnReset);
@@ -103,7 +114,7 @@ export function mountHud(): void {
   });
   btnMute.addEventListener("click", () => {
     const m = toggleMute();
-    btnMute.textContent = m ? "🔇" : "🔊";
+    btnMute.replaceChildren(iconImg(m ? "audio-off" : "audio-on", "ui-icon ui-icon-corner"));
   });
   btnReset.addEventListener("click", () => {
     if (!confirm("Wipe your save and start over? (Singularity Slices will be lost.)")) return;
@@ -135,7 +146,7 @@ export function mountHud(): void {
     card.type = "button";
 
     const header = el("div", "upg-header");
-    const icon = el("div", "upg-icon", def.icon);
+    const icon = iconImg(def.icon as IconName, "ui-icon upg-icon");
     const name = el("div", "upg-name", def.name);
     header.append(icon, name);
 
@@ -156,8 +167,8 @@ export function mountHud(): void {
   function fmtCost(def: UpgradeDef): string {
     const parts: string[] = [];
     if (def.cost.money) parts.push('<span class="chip chip-money">' + fmtMoney(def.cost.money) + '</span>');
-    if (def.cost.reputation) parts.push('<span class="chip chip-rep">' + def.cost.reputation + " ⭐</span>");
-    if (def.cost.cosmicDough) parts.push('<span class="chip chip-cosmic">' + fmt(def.cost.cosmicDough) + " ✨</span>");
+    if (def.cost.reputation) parts.push('<span class="chip chip-rep">' + def.cost.reputation + " " + iconHtml("star", "ui-icon ui-icon-sm") + "</span>");
+    if (def.cost.cosmicDough) parts.push('<span class="chip chip-cosmic">' + fmt(def.cost.cosmicDough) + " " + iconHtml("cosmic", "ui-icon ui-icon-sm") + "</span>");
     return parts.join(" ");
   }
 
@@ -243,7 +254,7 @@ export function mountHud(): void {
   });
 
   // Initial mute label
-  btnMute.textContent = isMuted() ? "🔇" : "🔊";
+  btnMute.replaceChildren(iconImg(isMuted() ? "audio-off" : "audio-on", "ui-icon ui-icon-corner"));
 
   // Suppress noUnusedLocals on getState (used by other modules anyway)
   void getState;

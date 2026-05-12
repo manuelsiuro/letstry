@@ -55,6 +55,53 @@ body {
     env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
+/* ---- UI icons (image replacements for emoji) ---- */
+/* Rendered as a circular badge: navy fill matches the icon's own background
+   (#0b1020) so the corners blend seamlessly into the circle, with a thin
+   outline + soft shadow to lift it off the surface. */
+.ui-icon {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  vertical-align: middle;
+  object-fit: cover;
+  border-radius: 50%;
+  background: #0b1020;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.ui-icon-sm {
+  width: 22px;
+  height: 22px;
+}
+
+.ui-icon-btn {
+  width: 36px;
+  height: 36px;
+  margin-right: 8px;
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+/* Audio toggle / corner icon button — image fills the existing button frame. */
+.icon-btn-img {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+img.ui-icon-corner {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 6px;
+  vertical-align: middle;
+}
+
 /* ---- Top stats bar ---- */
 #hud-top {
   pointer-events: auto;
@@ -89,7 +136,10 @@ body {
   color: var(--ink-dim);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin-top: 2px;
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .phase-label {
@@ -226,9 +276,9 @@ body {
   gap: 8px;
 }
 
-.upg-icon {
-  font-size: 22px;
-  line-height: 1;
+img.upg-icon {
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
 }

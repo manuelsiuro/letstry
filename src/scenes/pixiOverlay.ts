@@ -152,7 +152,7 @@ export async function startPixiOverlay(mount: HTMLElement): Promise<void> {
   subscribe((s: GameState, ev?: GameEvent) => {
     if (!ev) return;
     if (ev.type === "make") {
-      spawnText("+1 🍕", 0xf2c46d);
+      spawnText("+1", 0xf2c46d);
     } else if (ev.type === "sell" && ev.amount) {
       spawnText("+" + fmtMoney(ev.amount), 0x9be36b);
     } else if (ev.type === "buy") {
@@ -163,7 +163,7 @@ export async function startPixiOverlay(mount: HTMLElement): Promise<void> {
       const meta = phaseTitle[ev.phase ?? s.phase];
       if (meta) spawnFlash(meta.text, meta.color);
     } else if (ev.type === "transcend") {
-      spawnFlash("✨ +" + fmt(ev.amount ?? 0) + " SINGULARITY ✨", 0xffffff);
+      spawnFlash("+" + fmt(ev.amount ?? 0) + " SINGULARITY", 0xffffff);
     }
   });
 }
