@@ -241,6 +241,87 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   flue.position.set(0, 2.0, -1.7);
   shopLayer.add(flue);
 
+  // ---- Upgrade-driven props ----
+  // Shared geometries (one per prop type, reused across instances)
+  const doughGeo = new THREE.SphereGeometry(0.12, 12, 8);
+  const cheeseWheelGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.1, 16);
+  const flameGeo = new THREE.SphereGeometry(0.12, 8, 6);
+  const smokeGeo = new THREE.SphereGeometry(0.09, 6, 5);
+  const armGeo = new THREE.BoxGeometry(0.18, 0.08, 0.18);
+  const starSphereGeo = new THREE.SphereGeometry(0.07, 8, 6);
+
+  // dough ball — hovers in front of chef, visible when `dough` owned
+  const doughBall = new THREE.Mesh(doughGeo, matCream);
+  doughBall.position.set(0, 1.2, 0.35);
+  doughBall.visible = false;
+  shopLayer.add(doughBall);
+
+  // cheese wheel — sits on top shelf, visible when `cheese` owned
+  const cheeseWheel = new THREE.Mesh(cheeseWheelGeo, matCheese);
+  cheeseWheel.position.set(-1.3, 1.55 + 0.05 + 0.025, -2.0); // shelf top + half-height
+  cheeseWheel.visible = false;
+  shopLayer.add(cheeseWheel);
+
+  // second pizza disc — visible when `kitchen` owned; sits next to existing one
+  const pizza2 = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.45, 0.45, 0.06, 24),
+    new THREE.MeshStandardMaterial({ color: 0xf2c46d, roughness: 0.5, emissive: 0x331100, emissiveIntensity: 0.15 }),
+  );
+  pizza2.position.set(0.95, 0.62, 0);
+  pizza2.visible = false;
+  shopLayer.add(pizza2);
+
+  // marketing star fountain — 8 orbiting stars above the sign
+  const marketingGroup = new THREE.Group();
+  marketingGroup.position.set(0, 3.0, 0.3);
+  marketingGroup.rotation.x = -0.35; // tilted ring
+  marketingGroup.visible = false;
+  shopLayer.add(marketingGroup);
+  const starMat = new THREE.MeshStandardMaterial({ color: 0xffd54a, emissive: 0xffaa22, emissiveIntensity: 0.9, roughness: 0.4 });
+  const marketingStars: THREE.Mesh[] = [];
+  for (let i = 0; i < 8; i++) {
+    const s = new THREE.Mesh(starSphereGeo, starMat);
+    s.userData.phase = (i / 8) * Math.PI * 2;
+    marketingGroup.add(s);
+    marketingStars.push(s);
+  }
+
+  // Per-oven dynamic props (flame, smoke, bot-arm) — maintained alongside `ovens[]`
+  const flameMat = new THREE.MeshStandardMaterial({ color: 0xff7722, emissive: 0xff4400, emissiveIntensity: 1.2, roughness: 0.3 });
+  const smokeMat = new THREE.MeshStandardMaterial({ color: 0x888888, transparent: true, opacity: 0.5, roughness: 1 });
+  const botArmMat = new THREE.MeshStandardMaterial({ color: 0x444a55, emissive: 0x4cc9f0, emissiveIntensity: 0.4, roughness: 0.5 });
+
+  type SmokePuff = { mesh: THREE.Mesh; offset: number };
+  type OvenProps = { flame: THREE.Mesh; smoke: SmokePuff[]; arm: THREE.Mesh };
+  const ovenProps: OvenProps[] = [];
+  function makeOvenProps(oven: THREE.Mesh): OvenProps {
+    const flame = new THREE.Mesh(flameGeo, flameMat);
+    flame.position.set(oven.position.x, oven.position.y + 0.05, oven.position.z + 0.35);
+    flame.visible = false;
+    shopLayer.add(flame);
+    const smoke: SmokePuff[] = [];
+    for (let i = 0; i < 3; i++) {
+      const s = new THREE.Mesh(smokeGeo, smokeMat.clone());
+      s.position.set(oven.position.x, 1.0, oven.position.z);
+      s.visible = false;
+      shopLayer.add(s);
+      smoke.push({ mesh: s, offset: i / 3 });
+    }
+    const arm = new THREE.Mesh(armGeo, botArmMat);
+    arm.position.set(oven.position.x, 1.75, oven.position.z + 0.2);
+    arm.visible = false;
+    shopLayer.add(arm);
+    return { flame, smoke, arm };
+  }
+  function disposeOvenProps(p: OvenProps): void {
+    shopLayer.remove(p.flame);
+    for (const puff of p.smoke) {
+      shopLayer.remove(puff.mesh);
+      (puff.mesh.material as THREE.Material).dispose();
+    }
+    shopLayer.remove(p.arm);
+  }
+
   // ---- Local layer (bikes orbiting) ----
   const localLayer = new THREE.Group();
   scene.add(localLayer);
@@ -386,12 +467,30 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       const o = makeOven(x);
       shopLayer.add(o);
       ovens.push(o);
+      ovenProps.push(makeOvenProps(o));
     }
     while (ovens.length > desiredOvens) {
       const o = ovens.pop()!;
       shopLayer.remove(o);
       o.geometry.dispose();
+      const p = ovenProps.pop()!;
+      disposeOvenProps(p);
     }
+
+    // Per-oven prop visibility based on upgrades
+    const showFlames = !!s.upgradesOwned.oven;
+    const showArms = !!s.upgradesOwned.bots;
+    for (const p of ovenProps) {
+      p.flame.visible = showFlames;
+      for (const puff of p.smoke) puff.mesh.visible = showFlames;
+      p.arm.visible = showArms;
+    }
+
+    // Simple upgrade-bound prop visibility
+    doughBall.visible = !!s.upgradesOwned.dough;
+    cheeseWheel.visible = !!s.upgradesOwned.cheese;
+    pizza2.visible = !!s.upgradesOwned.kitchen;
+    marketingGroup.visible = !!s.upgradesOwned.marketing;
 
     // drones once cosmic
     const desiredDrones = s.upgradesOwned.drones ? 8 : s.upgradesOwned.cosmic ? 3 : 0;
@@ -416,7 +515,35 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     if (drones.length !== prevDroneCount) prevDroneCount = drones.length;
   }
 
-  subscribe((s) => applyState(s));
+  // ---- Purchase pulse ----
+  // For each buy event, look up the relevant Object3D(s) and animate a scale pop.
+  const PULSE_DURATION = 0.6;
+  type Pulse = { targets: THREE.Object3D[]; startedAt: number };
+  const pulses: Pulse[] = [];
+
+  function pulseTargetsFor(upgradeId: string): THREE.Object3D[] {
+    switch (upgradeId) {
+      case "dough":     return [doughBall];
+      case "cheese":    return [cheeseWheel];
+      case "oven":      return ovenProps.map((p) => p.flame);
+      case "bike":      return bikes.length > 0 ? [bikes[bikes.length - 1]] : [];
+      case "kitchen":   return [pizza2, ...(chefs.length > 1 ? [chefs[chefs.length - 1].group] : [])];
+      case "marketing": return [marketingGroup];
+      case "bots":      return ovenProps.map((p) => p.arm);
+      case "drones":    return drones.length > 0 ? [drones[drones.length - 1]] : [];
+      default:          return [];
+    }
+  }
+
+  subscribe((s, ev) => {
+    applyState(s);
+    if (ev && ev.type === "buy" && ev.upgradeId) {
+      const targets = pulseTargetsFor(ev.upgradeId);
+      if (targets.length > 0) {
+        pulses.push({ targets, startedAt: elapsed });
+      }
+    }
+  });
 
   // ---- Resize ----
   const onResize = (): void => {
@@ -452,10 +579,66 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
     // Pizza spin
     pizza.rotation.y = elapsed * 0.4;
+    pizza2.rotation.y = -elapsed * 0.4;
     // Oven flicker
     for (const o of ovens) {
       const mat = o.material as THREE.MeshStandardMaterial;
       mat.emissiveIntensity = 0.35 + Math.sin(elapsed * 6 + o.position.x) * 0.1;
+    }
+
+    // ---- Upgrade-driven prop animations ----
+    // Dough ball: spin + bob
+    if (doughBall.visible) {
+      doughBall.rotation.y = elapsed * 1.5;
+      doughBall.position.y = 1.2 + Math.sin(elapsed * 2) * 0.06;
+    }
+    // Cheese wheel: slow spin
+    if (cheeseWheel.visible) {
+      cheeseWheel.rotation.y = elapsed * 0.5;
+    }
+    // Oven flame + smoke (visibility already set by applyState)
+    for (const p of ovenProps) {
+      if (p.flame.visible) {
+        const flMat = p.flame.material as THREE.MeshStandardMaterial;
+        flMat.emissiveIntensity = 1.2 + Math.sin(elapsed * 8 + p.flame.position.x) * 0.4;
+        p.flame.scale.y = 1 + Math.sin(elapsed * 12 + p.flame.position.x) * 0.15;
+      }
+      for (const puff of p.smoke) {
+        if (!puff.mesh.visible) continue;
+        const t = ((elapsed * 0.5 + puff.offset) % 1);
+        puff.mesh.position.y = 1.0 + t * 1.0;
+        const m = puff.mesh.material as THREE.MeshStandardMaterial;
+        m.opacity = (1 - t) * 0.5;
+      }
+      if (p.arm.visible) {
+        p.arm.position.y = 1.75 + Math.sin(elapsed * 4 + p.arm.position.x * 3) * 0.12;
+        p.arm.rotation.y = Math.sin(elapsed * 3 + p.arm.position.x) * 0.5;
+      }
+    }
+    // Marketing star fountain
+    if (marketingGroup.visible) {
+      for (const s of marketingStars) {
+        const a = elapsed * 0.8 + (s.userData.phase as number);
+        s.position.set(Math.cos(a) * 1.6, 0, Math.sin(a) * 1.6);
+        const pop = 1 + Math.sin(elapsed * 3 + (s.userData.phase as number)) * 0.1;
+        s.scale.setScalar(pop);
+      }
+      marketingGroup.position.z = 0.3 + Math.sin(elapsed * 0.6) * 0.1;
+    }
+
+    // ---- Purchase pulse tick ----
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const pl = pulses[i];
+      const t = (elapsed - pl.startedAt) / PULSE_DURATION;
+      if (t >= 1) {
+        for (const target of pl.targets) target.scale.setScalar(1);
+        pulses.splice(i, 1);
+        continue;
+      }
+      // ease 1 -> 1.4 -> 1 (triangular peak at t=0.5)
+      const k = t < 0.5 ? t * 2 : (1 - t) * 2;
+      const scale = 1 + 0.4 * k;
+      for (const target of pl.targets) target.scale.setScalar(scale);
     }
     // Neon pulse
     neonGlow.intensity = 1.0 + Math.sin(elapsed * 3) * 0.4;
