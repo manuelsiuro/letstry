@@ -30,8 +30,9 @@ export function showMenu(): Promise<void> {
 
     const card = el("div", "menu-card");
 
-    const title = el("h1", "menu-title", "🍕 COSMIC PIZZA");
-    const subtitle = el("div", "menu-subtitle", "DELIVERY");
+    const logo = el("img", "menu-logo");
+    logo.src = "/assets/generated/cosmic-pizza-logo.png";
+    logo.alt = "Cosmic Pizza Delivery";
     const tagline = el(
       "p",
       "menu-tagline",
@@ -68,7 +69,7 @@ export function showMenu(): Promise<void> {
     const credit = el("div", "menu-credit", "Three.js + PixiJS + a little dough");
     footer.append(credit);
 
-    card.append(title, subtitle, tagline, playBtn, qrSection, footer);
+    card.append(logo, tagline, playBtn, qrSection, footer);
     root.append(card);
     document.body.append(root);
 
