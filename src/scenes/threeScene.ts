@@ -673,14 +673,37 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     );
   }
   dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
+  // Per-particle color jitter — warm-white base with slight pink / blue
+  // drift so the cloud isn't uniformly cream.
+  const dustColors = new Float32Array(DUST_COUNT * 3);
+  for (let i = 0; i < DUST_COUNT; i++) {
+    const tint = Math.random();
+    if (tint < 0.6) {
+      // warm white
+      dustColors[i * 3 + 0] = 1.0;
+      dustColors[i * 3 + 1] = 0.92;
+      dustColors[i * 3 + 2] = 0.72;
+    } else if (tint < 0.85) {
+      // pink-leaning
+      dustColors[i * 3 + 0] = 1.0;
+      dustColors[i * 3 + 1] = 0.82;
+      dustColors[i * 3 + 2] = 0.86;
+    } else {
+      // cool blue-leaning
+      dustColors[i * 3 + 0] = 0.82;
+      dustColors[i * 3 + 1] = 0.92;
+      dustColors[i * 3 + 2] = 1.0;
+    }
+  }
+  dustGeo.setAttribute("color", new THREE.BufferAttribute(dustColors, 3));
   const dustMat = new THREE.PointsMaterial({
-    color: 0xffe9b5,
     size: 0.045,
     sizeAttenuation: true,
     transparent: true,
     opacity: 0.55,
     fog: true,
     depthWrite: false,
+    vertexColors: true,
   });
   const dust = new THREE.Points(dustGeo, dustMat);
   shopLayer.add(dust);
