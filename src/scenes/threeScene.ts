@@ -2066,6 +2066,25 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   }
   let nextWormholeSliceAt = 0;
 
+  function spawnWormholeSlice(): void {
+    const slot = wormholeSlices.find((s) => !s.active);
+    if (!slot) return;
+    slot.sprite.position.copy(wormhole.position);
+    const a = Math.random() * Math.PI * 2;
+    const speed = 1.2 + Math.random() * 0.8;
+    slot.vel.set(
+      Math.cos(a) * speed,
+      0.4 + Math.random() * 0.4,
+      Math.sin(a) * speed * 0.5,
+    );
+    slot.spin = (Math.random() - 0.5) * 6;
+    slot.life = 0;
+    slot.maxLife = 2.4 + Math.random() * 1.0;
+    slot.active = true;
+    slot.sprite.visible = true;
+    slot.sprite.material.rotation = Math.random() * Math.PI * 2;
+  }
+
   // ---- Multiverse: ghost-Earth duplicates that drift around the main planet
   const multiverseLayer = new THREE.Group();
   multiverseLayer.visible = false;
@@ -3512,24 +3531,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       }
       // Wormhole occasionally ejects a pizza slice.
       if (elapsed >= nextWormholeSliceAt) {
-        const slot = wormholeSlices.find((s) => !s.active);
-        if (slot) {
-          slot.sprite.position.copy(wormhole.position);
-          // Random outward direction (mostly toward camera-right)
-          const a = Math.random() * Math.PI * 2;
-          const speed = 1.2 + Math.random() * 0.8;
-          slot.vel.set(
-            Math.cos(a) * speed,
-            0.4 + Math.random() * 0.4,
-            Math.sin(a) * speed * 0.5,
-          );
-          slot.spin = (Math.random() - 0.5) * 6;
-          slot.life = 0;
-          slot.maxLife = 2.4 + Math.random() * 1.0;
-          slot.active = true;
-          slot.sprite.visible = true;
-          slot.sprite.material.rotation = Math.random() * Math.PI * 2;
-        }
+        spawnWormholeSlice();
         nextWormholeSliceAt = elapsed + 2 + Math.random() * 3;
       }
       for (const ws of wormholeSlices) {
@@ -3748,6 +3750,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             // Park the camera here for ~0.8s of black before the reveal,
             // then let the normal ease (~1.2/s) pull it back out.
             cosmicRevealHold = 0.8;
+            // Burst of pizza slices from the wormhole — the portal "opens"
+            // and dumps 4 pizzas at once for the reveal moment.
+            for (let i = 0; i < 4; i++) spawnWormholeSlice();
+            nextWormholeSliceAt = elapsed + 2;
           } else if (p === "empire" && !firstEmpireSeen) {
             // ✨ First-empire dramatic reveal: park camera alongside the
             // flagship looking toward the wider fleet, then pull back.
