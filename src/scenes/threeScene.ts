@@ -2374,8 +2374,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   function spawnDrone(): void {
     const d = new THREE.Group() as Drone;
+    const droneScale = 0.55 + Math.random() * 0.2;
     onModelReady("drone", (clone) => {
-      clone.scale.setScalar(0.65);
+      clone.scale.setScalar(droneScale);
       d.add(clone);
     });
     // Pizza-box payload, hanging below the drone with a small tether line.
