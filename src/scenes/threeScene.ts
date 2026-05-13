@@ -726,6 +726,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     legR: THREE.Mesh;
     armL: THREE.Mesh;
     armR: THREE.Mesh;
+    pizzaBox: THREE.Group;
     state: CustomerState;
     stateTime: number;
     spawnPos: THREE.Vector3;
@@ -788,6 +789,22 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const armR = new THREE.Mesh(custArmGeo, matShirt);
     armR.position.set(0.2, 0.95, 0);
     g.add(armR);
+    // Pizza box held in both hands — appears only when leaving the shop.
+    const pizzaBox = new THREE.Group();
+    const boxBody = new THREE.Mesh(
+      new THREE.BoxGeometry(0.32, 0.07, 0.32),
+      new THREE.MeshStandardMaterial({ color: 0xe04848, roughness: 0.5 }),
+    );
+    pizzaBox.add(boxBody);
+    const boxLid = new THREE.Mesh(
+      new THREE.BoxGeometry(0.34, 0.02, 0.34),
+      new THREE.MeshStandardMaterial({ color: 0xf5e6c8, roughness: 0.6 }),
+    );
+    boxLid.position.y = 0.045;
+    pizzaBox.add(boxLid);
+    pizzaBox.position.set(0, 0.85, 0.22); // held in front of torso
+    pizzaBox.visible = false;
+    g.add(pizzaBox);
     // Spawn from a random edge of the local play area
     const side = Math.random() < 0.5 ? -1 : 1;
     const spawnX = side * (5 + Math.random() * 2);
@@ -801,6 +818,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     return {
       group: g,
       legL, legR, armL, armR,
+      pizzaBox,
       state: "arriving",
       stateTime: 0,
       spawnPos,
@@ -1706,6 +1724,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             c.state = "leaving";
             c.stateTime = 0;
             c.travelTime = Math.max(0.5, c.queuePos.distanceTo(c.exitPos) / CUSTOMER_SPEED);
+            // Got their pizza — hand them the box.
+            c.pizzaBox.visible = true;
           }
           break;
         }
@@ -1722,6 +1742,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             c.state = "arriving";
             c.stateTime = 0;
             c.travelTime = Math.max(0.5, c.spawnPos.distanceTo(c.queuePos) / CUSTOMER_SPEED);
+            // Hands empty again on the next visit.
+            c.pizzaBox.visible = false;
           }
           break;
         }
