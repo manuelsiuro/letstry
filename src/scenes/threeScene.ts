@@ -1739,10 +1739,13 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     armR.position.set(0.2, 0.95, 0);
     g.add(armR);
     // Pizza box held in both hands — appears only when leaving the shop.
+    // Random body color per customer so the leaving queue varies.
+    const boxColors = [0xe04848, 0xe07b3a, 0xc63548, 0xd9603a];
+    const boxColor = boxColors[Math.floor(Math.random() * boxColors.length)];
     const pizzaBox = new THREE.Group();
     const boxBody = new THREE.Mesh(
       new THREE.BoxGeometry(0.32, 0.07, 0.32),
-      new THREE.MeshStandardMaterial({ color: 0xe04848, roughness: 0.5 }),
+      new THREE.MeshStandardMaterial({ color: boxColor, roughness: 0.5 }),
     );
     pizzaBox.add(boxBody);
     const boxLid = new THREE.Mesh(
