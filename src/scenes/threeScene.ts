@@ -1428,6 +1428,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const baseScale = 0.7 + Math.random() * 0.8;
     s.userData.baseScale = baseScale;
     s.scale.setScalar(baseScale);
+    // Per-star orbit radius — ring is no longer a perfect circle.
+    s.userData.orbitRadius = 1.4 + Math.random() * 0.5;
     marketingGroup.add(s);
     marketingStars.push(s);
   }
@@ -3165,7 +3167,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     if (marketingGroup.visible) {
       for (const s of marketingStars) {
         const a = elapsed * 0.8 + (s.userData.phase as number);
-        s.position.set(Math.cos(a) * 1.6, 0, Math.sin(a) * 1.6);
+        const r = (s.userData.orbitRadius as number | undefined) ?? 1.6;
+        s.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
         const base = (s.userData.baseScale as number | undefined) ?? 1;
         const pop = base * (1 + Math.sin(elapsed * 3 + (s.userData.phase as number)) * 0.1);
         s.scale.setScalar(pop);
