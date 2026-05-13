@@ -1297,6 +1297,21 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   type FadeState = "idle" | "out" | "in";
   let fadeState: FadeState = "idle";
+  // Tracks whether the player has ever been into the cosmic group during
+  // THIS scene session. First time triggers a dramatic close-to-Earth start
+  // that pulls back to the standard wide view.
+  let firstCosmicSeen = false;
+  // Seconds remaining in which the camera holds at the close Earth position
+  // before the normal ease resumes (used for the first-cosmic reveal).
+  let cosmicRevealHold = 0;
+  // Seed from save: if the player already has slices, they've transcended
+  // before and don't need the show.
+  try {
+    const initial = getState();
+    if ((initial.singularitySlices ?? 0) > 0 || initial.phase === "cosmic" || initial.phase === "multiverse" || initial.phase === "timeloop" || initial.phase === "empire") {
+      firstCosmicSeen = true;
+    }
+  } catch { /* ignore */ }
   let fadeTime = 0;
   const FADE_DURATION = 0.55; // seconds per half
   let pendingPhase: Phase | null = null;
@@ -1629,6 +1644,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       const e = cubicInOut(k);
       camPos.lerpVectors(introStartPos, target.pos, e);
       camLook.lerpVectors(introStartLook, target.look, e);
+    } else if (cosmicRevealHold > 0) {
+      // First-cosmic dramatic hold: stay at the close-to-Earth pose so
+      // the player sees the planet up close, then the ease pulls back.
+      cosmicRevealHold -= dt;
     } else {
       // camera ease to current phase
       camPos.lerp(target.pos, Math.min(1, dt * 1.2));
@@ -2155,10 +2174,24 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
           pendingPhase = null;
           fadeState = "in";
           fadeTime = 0;
-          // Snap camera to the new target so the reveal starts there
+          // Snap camera to the new target so the reveal starts there.
           const newTarget = camTargets[p];
           camPos.copy(newTarget.pos);
           camLook.copy(newTarget.look);
+          // ✨ First-cosmic dramatic reveal: drop the camera close to Earth
+          // so the post-fade ease has to pull it BACK to the wide view,
+          // selling the "you just made the leap to space" moment.
+          const isCosmicGroup =
+            p === "cosmic" || p === "multiverse" || p === "timeloop" || p === "empire";
+          if (isCosmicGroup && !firstCosmicSeen) {
+            firstCosmicSeen = true;
+            // Earth is at (0, 0.4, 0) — start right next to it.
+            camPos.set(0, 1.0, 3.2);
+            camLook.set(0, 0.4, 0);
+            // Park the camera here for ~0.8s of black before the reveal,
+            // then let the normal ease (~1.2/s) pull it back out.
+            cosmicRevealHold = 0.8;
+          }
         }
       } else {
         // "in" — opacity 1 → 0
