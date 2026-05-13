@@ -3278,6 +3278,13 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       }
       c.armL.rotation.x = armLX;
       c.armR.rotation.x = armRX;
+      // Body tilt — during the stretch (customer-facing) gesture, lean the
+      // chef toward the queue (positive z direction). Outside the window
+      // the rotation eases back to neutral.
+      const targetBodyY = cycle >= 4.6 && cycle < 6 ? Math.sin((cycle - 4.6) * Math.PI / 1.4) * 0.18 : 0;
+      c.group.rotation.y = THREE.MathUtils.lerp(
+        c.group.rotation.y, targetBodyY, Math.min(1, dt * 3),
+      );
 
       // Speech bubble cycle: spawn a fresh bubble every nextSpeechAt seconds,
       // each bubble lives speechMaxLife seconds and fades in/out.
