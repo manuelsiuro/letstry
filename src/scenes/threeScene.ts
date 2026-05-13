@@ -1,3 +1,58 @@
+// Cosmic Pizza Delivery — 3D scene
+//
+// One big file because each subsystem hooks into the per-frame animate loop
+// and they all share scene state. The high-level sections, in order:
+//
+//   1. Composer + post-processing  — bloom, vignette, chromatic, scanlines
+//   2. HDR + GLB loaders           — pizza/oven/bike/drone/planet/wormhole
+//   3. Shop layer
+//        - wet ground + puddles
+//        - background traffic (single shared car)
+//        - city backdrop with flickering windows + rotating roof signs
+//        - red counter, glass counter top, EST. stencil
+//        - PIZZA neon sign + god-ray planes
+//        - striped awning + warm bulb string + tassels + red bleed light
+//        - hanging OPEN sign
+//        - kitchen back wall (brick texture) + shelves + jars + boxes
+//        - wall clock (animated hands)
+//        - ovens with flame/smoke/sprite-steam/robot arms
+//        - chefs (gesture cycle + speech bubbles + thrown dough + shadow)
+//        - upgrade-driven props: dough ball, cheese wheel, marketing stars
+//        - atmospheric dust mote points cloud
+//        - streetlights
+//   4. Local layer
+//        - bike pool with depart/wait/return state machine, lean, exhaust
+//        - customer pool with queue slots, walk cycle, head tracking,
+//          pizza-box-on-leave, hat/scale variety, fake shadows
+//   5. Cosmic layer
+//        - Earth (planet GLB + atmosphere halo + city lights + precession)
+//        - orbiting planets, starfield, shooting stars (pool + tints)
+//        - wormhole (GLB + warp rings + ejected pizza-slice sprites)
+//        - drone swarm (payload boxes + LEDs + wobble)
+//        - phase-distinct sub-layers:
+//            multiverse  — ghost-Earth duplicates
+//            timeloop    — crystal cluster
+//            empire      — flagship + V-formation fleet + engine flares
+//   6. Final layer
+//        - pizza-sun (crust + cheese + sauce + pepperoni + olive + Ω stamp)
+//        - 4 pizza moons orbiting on tilted ring
+//        - orbiting "OMEGA TOPPING!" sprite text
+//        - breathing camera, glow-ramp over time-in-phase
+//   7. Particle systems
+//        - puff/coin sprite pool   — make/sell + bike exhaust + bike returns
+//        - marketing glitter pool   — drips from marketing stars
+//        - thrown dough pool        — chef throw gesture
+//   8. Camera control
+//        - per-phase target table + ease
+//        - cinematic intro pan on first boot
+//        - first-cosmic + first-empire dramatic reveals (close → wide)
+//        - phase-fade overlay (black-out under fade peak)
+//        - mouse parallax in shop/local
+//        - make-event camera shake
+//        - hidden-tab pause + dt clamp
+//
+// Tunables at the top of the module: FX_ON (?fx=off), LOW_POWER (?perf=low).
+
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
