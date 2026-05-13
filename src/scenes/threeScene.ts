@@ -876,6 +876,32 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   function releaseQueueSlot(slot: number): void {
     if (slot >= 0 && slot < queueSlotTaken.length) queueSlotTaken[slot] = false;
   }
+  // Compact the queue: when slot N frees, the lowest-indexed waiting customer
+  // with slot > N walks up to fill it. Repeats until no more advances possible.
+  function advanceQueue(): void {
+    for (let target = 0; target < QUEUE_SLOT_COUNT; target++) {
+      if (queueSlotTaken[target]) continue;
+      // Find a waiting customer in a higher slot to move down
+      let bestC: Customer | null = null;
+      for (const c of customers) {
+        if (c.state !== "waiting") continue;
+        if (c.queueSlot <= target) continue;
+        if (!bestC || c.queueSlot < bestC.queueSlot) bestC = c;
+      }
+      if (!bestC) continue;
+      // Reassign the slot
+      queueSlotTaken[bestC.queueSlot] = false;
+      queueSlotTaken[target] = true;
+      bestC.queueSlot = target;
+      const newPos = queueSlotPos(target);
+      // Switch back to "arriving" so they walk from current pos to newPos.
+      bestC.spawnPos.copy(bestC.group.position);
+      bestC.queuePos.copy(newPos);
+      bestC.state = "arriving";
+      bestC.stateTime = 0;
+      bestC.travelTime = Math.max(0.3, bestC.spawnPos.distanceTo(newPos) / CUSTOMER_SPEED);
+    }
+  }
   const customers: Customer[] = [];
   const CUSTOMER_SPEED = 1.4; // m/s
 
@@ -2053,6 +2079,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             // Free the queue slot so the next customer can take it.
             releaseQueueSlot(c.queueSlot);
             c.queueSlot = -1;
+            // Shuffle the queue: anyone behind them moves up one slot.
+            advanceQueue();
           }
           break;
         }
