@@ -874,8 +874,25 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const botArmWristLEDMat = new THREE.MeshStandardMaterial({ color: 0xff3366, emissive: 0xff3366, emissiveIntensity: 1.6, roughness: 0.4 });
 
   type SmokePuff = { mesh: THREE.Mesh; offset: number };
-  type OvenProps = { flame: THREE.Mesh; smoke: SmokePuff[]; arm: THREE.Group };
+  type SteamSprite = { sprite: THREE.Sprite; offset: number };
+  type OvenProps = { flame: THREE.Mesh; smoke: SmokePuff[]; steam: SteamSprite[]; arm: THREE.Group };
   const ovenProps: OvenProps[] = [];
+
+  // Shared steam texture — soft puffy radial gradient.
+  const steamTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 64; cv.height = 64;
+    const ctx = cv.getContext("2d")!;
+    const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+    g.addColorStop(0, "rgba(220,220,220,0.85)");
+    g.addColorStop(0.6, "rgba(200,200,200,0.35)");
+    g.addColorStop(1, "rgba(180,180,180,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
   function makeOvenProps(oven: THREE.Group): OvenProps {
     // Oven top is at y = GROUND_Y + 1.27 ≈ 0.77 (oven height 1.95 * 0.65).
     // Flame sits in the door at ~25% of oven height.
@@ -898,7 +915,21 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     arm.position.set(oven.position.x, ovenTopY + 0.55, oven.position.z + 0.3);
     arm.visible = false;
     shopLayer.add(arm);
-    return { flame, smoke, arm };
+    // Steam plumes — sprite-based, more visible than the 3D smoke spheres
+    // at camera distance. Loop position from chimney top to ~1.2m above.
+    const steam: SteamSprite[] = [];
+    for (let i = 0; i < 3; i++) {
+      const mat = new THREE.SpriteMaterial({
+        map: steamTex, transparent: true, opacity: 0, depthWrite: false,
+      });
+      const sp = new THREE.Sprite(mat);
+      sp.position.set(oven.position.x, ovenTopY, oven.position.z);
+      sp.scale.setScalar(0.45);
+      sp.visible = false;
+      shopLayer.add(sp);
+      steam.push({ sprite: sp, offset: i / 3 });
+    }
+    return { flame, smoke, steam, arm };
   }
   function makeRobotArm(): THREE.Group {
     const g = new THREE.Group();
@@ -958,6 +989,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     for (const puff of p.smoke) {
       shopLayer.remove(puff.mesh);
       (puff.mesh.material as THREE.Material).dispose();
+    }
+    for (const st of p.steam) {
+      shopLayer.remove(st.sprite);
+      st.sprite.material.dispose();
     }
     shopLayer.remove(p.arm);
   }
@@ -1936,6 +1971,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     for (const p of ovenProps) {
       p.flame.visible = showFlames;
       for (const puff of p.smoke) puff.mesh.visible = showFlames;
+      for (const st of p.steam) st.sprite.visible = showFlames;
       p.arm.visible = showArms;
     }
 
@@ -2259,6 +2295,18 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         puff.mesh.position.y = baseY + t * 1.0;
         const m = puff.mesh.material as THREE.MeshStandardMaterial;
         m.opacity = (1 - t) * 0.5;
+      }
+      // Steam sprite plumes — same loop, larger scale, fading toward top.
+      for (const st of p.steam) {
+        if (!st.sprite.visible) continue;
+        const t = ((elapsed * 0.35 + st.offset) % 1);
+        const baseY = (p.smoke[0]?.mesh.userData.baseY as number) ?? 0.8;
+        st.sprite.position.y = baseY + t * 1.4;
+        // Subtle horizontal drift
+        const xWobble = Math.sin(elapsed * 1.5 + st.offset * 6) * 0.08;
+        st.sprite.position.x = p.flame.position.x + xWobble;
+        st.sprite.material.opacity = (1 - t) * 0.7;
+        st.sprite.scale.setScalar(0.45 + t * 0.6);
       }
       if (p.arm.visible) {
         // Sway side-to-side + bob slightly + grab/release cycle.
