@@ -3968,6 +3968,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         Math.sin(oa) * omegaOrbit.radius * omegaOrbit.tilt,
         Math.sin(oa * 0.7) * 1.5,
       );
+      // Text scale breathes with the sun glow.
+      const omegaPulse = 1 + Math.sin(elapsed * 2) * 0.08;
+      omegaSprite.scale.set(3.2 * omegaPulse, 0.8 * omegaPulse, 1);
       // Pizza moons orbit the sun + spin individually.
       for (const m of pizzaMoons) {
         m.angle += dt * m.speed;
