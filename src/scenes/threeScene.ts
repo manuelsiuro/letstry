@@ -581,12 +581,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       );
       antenna.position.set(0, height / 2 + 0.6, 0);
       b.add(antenna);
-      // Red aircraft-warning light on top — joins blinkWindows for the
-      // standard sin-driven flicker tick.
+      // Aircraft-warning light on top — joins blinkWindows for the
+      // standard sin-driven flicker tick. Mix of red and amber across
+      // buildings, like real cities use FAA standard tones.
+      const warnColor = Math.random() < 0.7 ? 0xff3344 : 0xff8800;
       const warnLight = new THREE.Mesh(
         new THREE.SphereGeometry(0.06, 8, 6),
         new THREE.MeshStandardMaterial({
-          color: 0xff3344, emissive: 0xff3344, emissiveIntensity: 1.4, fog: false,
+          color: warnColor, emissive: warnColor, emissiveIntensity: 1.4, fog: false,
         }),
       );
       warnLight.position.set(0, height / 2 + 1.25, 0);
