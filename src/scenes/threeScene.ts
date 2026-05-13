@@ -3492,8 +3492,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             c.state = "leaving";
             c.stateTime = 0;
             c.travelTime = Math.max(0.5, c.queuePos.distanceTo(c.exitPos) / CUSTOMER_SPEED);
-            // Got their pizza — hand them the box.
+            // Got their pizza — hand them the box, and pop it briefly.
             c.pizzaBox.visible = true;
+            c.group.userData.boxPulseStart = elapsed;
             // Free the queue slot so the next customer can take it.
             releaseQueueSlot(c.queueSlot);
             c.queueSlot = -1;
@@ -3585,6 +3586,18 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       while (hDiff < -Math.PI) hDiff += Math.PI * 2;
       c.headFacing += hDiff * Math.min(1, dt * 5);
       c.head.rotation.y = c.headFacing;
+      // Pizza-box receive pulse — 0.3s scale pop right when handed over.
+      const pulseStart = c.group.userData.boxPulseStart as number | undefined;
+      if (pulseStart !== undefined) {
+        const t = (elapsed - pulseStart) / 0.3;
+        if (t >= 1) {
+          c.pizzaBox.scale.setScalar(1);
+          c.group.userData.boxPulseStart = undefined;
+        } else {
+          const k = t < 0.5 ? t * 2 : (1 - t) * 2; // triangle 0..1..0
+          c.pizzaBox.scale.setScalar(1 + k * 0.35);
+        }
+      }
     }
 
     // Cosmic
