@@ -666,6 +666,105 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     wormhole.add(clone);
   });
 
+  // ---- Multiverse: ghost-Earth duplicates that drift around the main planet
+  const multiverseLayer = new THREE.Group();
+  multiverseLayer.visible = false;
+  cosmicLayer.add(multiverseLayer);
+  type Ghost = THREE.Group & { userData: { angle: number; radius: number; speed: number; tint: number } };
+  const ghosts: Ghost[] = [];
+  const ghostTints = [0xff66cc, 0x66ccff];
+  for (let i = 0; i < ghostTints.length; i++) {
+    const g = new THREE.Group() as Ghost;
+    onModelReady("planet", (clone) => {
+      clone.scale.setScalar(0.9);
+      clone.traverse((n) => {
+        const m = (n as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+        if (m && (m as { color?: unknown }).color) {
+          const cm = m.clone();
+          cm.transparent = true;
+          cm.opacity = 0.45;
+          cm.emissive = new THREE.Color(ghostTints[i]);
+          cm.emissiveIntensity = 0.8;
+          (n as THREE.Mesh).material = cm;
+        }
+      });
+      g.add(clone);
+    });
+    g.userData.angle = (i / ghostTints.length) * Math.PI * 2;
+    g.userData.radius = 3.0 + i * 1.4;
+    g.userData.speed = 0.15 + i * 0.05;
+    g.userData.tint = ghostTints[i];
+    multiverseLayer.add(g);
+    ghosts.push(g);
+  }
+
+  // ---- Timeloop: spinning crystal cluster around Earth
+  const timeloopLayer = new THREE.Group();
+  timeloopLayer.visible = false;
+  cosmicLayer.add(timeloopLayer);
+  const crystalGeo = new THREE.OctahedronGeometry(0.35, 0);
+  const crystalMat = new THREE.MeshStandardMaterial({
+    color: 0x9be7ff,
+    emissive: 0x4cc9f0,
+    emissiveIntensity: 1.4,
+    roughness: 0.2,
+    metalness: 0.3,
+    transparent: true,
+    opacity: 0.85,
+  });
+  type Crystal = THREE.Mesh & { userData: { angle: number; phase: number; radius: number; tilt: number } };
+  const crystals: Crystal[] = [];
+  for (let i = 0; i < 6; i++) {
+    const c = new THREE.Mesh(crystalGeo, crystalMat) as unknown as Crystal;
+    c.userData.angle = (i / 6) * Math.PI * 2;
+    c.userData.phase = i * 0.7;
+    c.userData.radius = 2.3;
+    c.userData.tilt = (i % 2 === 0 ? 1 : -1) * 0.6;
+    timeloopLayer.add(c);
+    crystals.push(c);
+  }
+
+  // ---- Empire: flagship + extra drone fleet flying in formation
+  const empireLayer = new THREE.Group();
+  empireLayer.visible = false;
+  cosmicLayer.add(empireLayer);
+  // Flagship: angular triangular hull from primitive geos.
+  const flagship = new THREE.Group();
+  const hullMat = new THREE.MeshStandardMaterial({ color: 0x55606e, roughness: 0.4, metalness: 0.6 });
+  const hullEmissiveMat = new THREE.MeshStandardMaterial({ color: 0xff3366, emissive: 0xff3366, emissiveIntensity: 1.2 });
+  const hullBody = new THREE.Mesh(new THREE.ConeGeometry(0.7, 2.5, 4), hullMat);
+  hullBody.rotation.z = Math.PI / 2;
+  hullBody.rotation.y = Math.PI / 4;
+  flagship.add(hullBody);
+  const hullWingL = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.6), hullMat);
+  hullWingL.position.set(-0.4, 0, 0.55);
+  flagship.add(hullWingL);
+  const hullWingR = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.6), hullMat);
+  hullWingR.position.set(-0.4, 0, -0.55);
+  flagship.add(hullWingR);
+  // Bridge / glowing eye on the nose
+  const hullEye = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), hullEmissiveMat);
+  hullEye.position.set(1.3, 0.1, 0);
+  flagship.add(hullEye);
+  flagship.scale.setScalar(1.8);
+  flagship.position.set(-5, 2.5, -1);
+  empireLayer.add(flagship);
+  // Fleet: extra drone squad in a V formation behind the flagship.
+  const fleet: THREE.Group[] = [];
+  for (let i = 0; i < 9; i++) {
+    const f = new THREE.Group();
+    onModelReady("drone", (clone) => {
+      clone.scale.setScalar(0.7);
+      f.add(clone);
+    });
+    // V formation: offset along x and z based on index.
+    const row = Math.floor(i / 2) + 1;
+    const side = i % 2 === 0 ? 1 : -1;
+    f.position.set(-7 - row * 0.9, 2.5 + (Math.random() - 0.5) * 0.4, -1 + side * row * 1.1);
+    empireLayer.add(f);
+    fleet.push(f);
+  }
+
   type Drone = THREE.Group & { userData: { angle: number; radius: number; speed: number; tilt: number } };
   const drones: Drone[] = [];
   function spawnDrone(): void {
@@ -788,7 +887,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     credits:    { pos: new THREE.Vector3(0, 0, 5),      look: new THREE.Vector3(0, 0, 0) },
     multiverse: { pos: new THREE.Vector3(2, 1, 9),      look: new THREE.Vector3(0, 0, 0) },
     timeloop:   { pos: new THREE.Vector3(-2, 1.5, 8),   look: new THREE.Vector3(0, 0, 0) },
-    empire:     { pos: new THREE.Vector3(0, 4, 14),     look: new THREE.Vector3(0, 0, 0) },
+    empire:     { pos: new THREE.Vector3(2, 3, 12),     look: new THREE.Vector3(-2, 1, -1) },
   };
 
   let currentPhase: Phase = "shop";
@@ -868,6 +967,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     shopLayer.visible = s.phase === "shop" || s.phase === "local";
     localLayer.visible = s.phase === "shop" || s.phase === "local";
     cosmicLayer.visible = s.phase === "cosmic" || s.phase === "multiverse" || s.phase === "timeloop" || s.phase === "empire";
+    multiverseLayer.visible = s.phase === "multiverse";
+    timeloopLayer.visible = s.phase === "timeloop";
+    empireLayer.visible = s.phase === "empire";
     finalLayer.visible = s.phase === "final" || s.phase === "credits";
 
     if (s.phase !== prevPhase) {
@@ -1133,6 +1235,45 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         const tilt = d.userData.tilt;
         d.position.set(Math.cos(a) * r, tilt + Math.sin(a * 2) * 0.2, Math.sin(a) * r);
         d.rotation.y = -a + Math.PI / 2;
+      }
+
+      // ---- Multiverse ghosts ----
+      if (multiverseLayer.visible) {
+        for (const g of ghosts) {
+          g.userData.angle += dt * g.userData.speed;
+          const a = g.userData.angle;
+          const r = g.userData.radius;
+          g.position.set(Math.cos(a) * r, Math.sin(a * 0.6) * 0.6, Math.sin(a) * r);
+          g.rotation.y += dt * 0.2;
+        }
+      }
+
+      // ---- Time crystals ----
+      if (timeloopLayer.visible) {
+        for (const c of crystals) {
+          c.userData.angle += dt * 0.4;
+          const a = c.userData.angle;
+          const r = c.userData.radius;
+          c.position.set(
+            Math.cos(a) * r,
+            Math.sin(a * 1.4 + c.userData.phase) * 0.7 + c.userData.tilt,
+            Math.sin(a) * r,
+          );
+          c.rotation.x += dt * 1.2;
+          c.rotation.y += dt * 1.5;
+        }
+      }
+
+      // ---- Empire flagship + fleet ----
+      if (empireLayer.visible) {
+        flagship.position.x = -5 + Math.sin(elapsed * 0.3) * 0.4;
+        flagship.rotation.y = Math.sin(elapsed * 0.25) * 0.15;
+        for (let i = 0; i < fleet.length; i++) {
+          const f = fleet[i];
+          const baseY = (f.userData.baseY ??= f.position.y);
+          f.position.y = baseY + Math.sin(elapsed * 1.5 + i) * 0.15;
+          f.rotation.y = Math.sin(elapsed * 0.5 + i * 0.4) * 0.2;
+        }
       }
     }
 
