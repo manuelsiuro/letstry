@@ -177,6 +177,14 @@ export async function startPixiOverlay(mount: HTMLElement): Promise<void> {
       if (meta) spawnFlash(meta.text, meta.color);
     } else if (ev.type === "transcend") {
       spawnFlash("+" + fmt(ev.amount ?? 0) + " SINGULARITY", 0xffffff);
+      // Screen-wide confetti — burst sparkles from 5 anchor points so the
+      // entire frame glitters during the transcend reveal.
+      const w = app.screen.width;
+      const h = app.screen.height;
+      for (let i = 0; i < 5; i++) {
+        const anchor = { x: w * (0.15 + Math.random() * 0.7), y: h * (0.2 + Math.random() * 0.4) };
+        spawnSparkles(anchor, 0xffd54a, 30);
+      }
     }
   });
 }
