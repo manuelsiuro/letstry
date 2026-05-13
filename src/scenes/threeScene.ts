@@ -1886,6 +1886,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // Seconds remaining in which the camera holds at a dramatic close pose
   // before the normal ease resumes (used for first-cosmic / first-empire).
   let cosmicRevealHold = 0;
+  // Camera shake — decaying jitter applied on top of the eased cam position
+  // when the player makes a pizza. Updated by subscribe + ticked in the
+  // animate loop.
+  let shakeTime = 0;
+  const SHAKE_DURATION = 0.18;
   // Seed from save: if the player already has slices, they've transcended
   // before and don't need the show.
   try {
@@ -2149,6 +2154,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         for (let i = 0; i < Math.min(3, Math.ceil(makeAccum)); i++) spawnParticle("make");
         makeAccum = 0;
         lastMakeEmit = elapsed;
+        // Tactile shake — short decaying jitter on the camera.
+        shakeTime = SHAKE_DURATION;
       }
     } else if (ev.type === "sell") {
       sellAccum += ev.amount ?? 1;
@@ -2247,6 +2254,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     camera.position.copy(camPos);
     camera.position.x += Math.sin(elapsed * 0.4) * drift;
     camera.position.y += Math.cos(elapsed * 0.3) * drift * 0.5;
+    // Decaying make-shake — kicks the camera with high-frequency noise then
+    // decays linearly over SHAKE_DURATION.
+    if (shakeTime > 0) {
+      shakeTime = Math.max(0, shakeTime - dt);
+      const amp = 0.06 * (shakeTime / SHAKE_DURATION);
+      camera.position.x += (Math.random() - 0.5) * amp;
+      camera.position.y += (Math.random() - 0.5) * amp;
+    }
     tmpLook.copy(camLook);
     camera.lookAt(tmpLook);
 
