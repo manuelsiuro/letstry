@@ -1399,8 +1399,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // THIS scene session. First time triggers a dramatic close-to-Earth start
   // that pulls back to the standard wide view.
   let firstCosmicSeen = false;
-  // Seconds remaining in which the camera holds at the close Earth position
-  // before the normal ease resumes (used for the first-cosmic reveal).
+  let firstEmpireSeen = false;
+  // Seconds remaining in which the camera holds at a dramatic close pose
+  // before the normal ease resumes (used for first-cosmic / first-empire).
   let cosmicRevealHold = 0;
   // Seed from save: if the player already has slices, they've transcended
   // before and don't need the show.
@@ -1408,6 +1409,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const initial = getState();
     if ((initial.singularitySlices ?? 0) > 0 || initial.phase === "cosmic" || initial.phase === "multiverse" || initial.phase === "timeloop" || initial.phase === "empire") {
       firstCosmicSeen = true;
+    }
+    // empire-specific reveal: seen if save already has empire credits OR
+    // is already in the empire phase.
+    if ((initial.empireCredits ?? 0) > 0 || initial.phase === "empire") {
+      firstEmpireSeen = true;
     }
   } catch { /* ignore */ }
   let fadeTime = 0;
@@ -2298,6 +2304,15 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             // Park the camera here for ~0.8s of black before the reveal,
             // then let the normal ease (~1.2/s) pull it back out.
             cosmicRevealHold = 0.8;
+          } else if (p === "empire" && !firstEmpireSeen) {
+            // ✨ First-empire dramatic reveal: park camera alongside the
+            // flagship looking toward the wider fleet, then pull back.
+            firstEmpireSeen = true;
+            // Flagship is at (-5, 2.5, -1); position camera off its
+            // starboard quarter looking forward into the fleet.
+            camPos.set(-3.2, 2.8, 0.8);
+            camLook.set(-6, 2.5, -1);
+            cosmicRevealHold = 0.9;
           }
         }
       } else {
