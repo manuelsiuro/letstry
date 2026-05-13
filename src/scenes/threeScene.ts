@@ -1620,8 +1620,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     travelTime: number; // seconds for current depart/return leg
     facing: number; // current Y rotation
     lastPuffAt: number; // elapsed-timestamp of the last exhaust puff
+    speed: number; // per-bike top speed
   };
-  const BIKE_SPEED = 3.2; // m/s
+  // Bike top speed is now per-bike (Bike.speed in ~[2.6, 3.8] m/s). 3.2
+  // is the population mean.
   const BIKE_BASE_Y = GROUND_Y + 0.05;
   const bikes: Bike[] = [];
 
@@ -1671,6 +1673,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       travelTime: 0,
       facing: 0,
       lastPuffAt: -Infinity,
+      speed: 2.6 + Math.random() * 1.2,
     });
   }
 
@@ -3575,7 +3578,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             b.state = "depart";
             b.stateTime = 0;
             b.dest = pickDestination();
-            b.travelTime = Math.max(0.6, b.park.distanceTo(b.dest) / BIKE_SPEED);
+            b.travelTime = Math.max(0.6, b.park.distanceTo(b.dest) / b.speed);
           }
           break;
         }
@@ -3596,7 +3599,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
           if (b.stateTime >= 0.9) {
             b.state = "return";
             b.stateTime = 0;
-            b.travelTime = Math.max(0.6, b.park.distanceTo(b.dest) / BIKE_SPEED);
+            b.travelTime = Math.max(0.6, b.park.distanceTo(b.dest) / b.speed);
           }
           break;
         }
