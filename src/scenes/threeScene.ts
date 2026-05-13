@@ -1432,6 +1432,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     s.scale.setScalar(baseScale);
     // Per-star orbit radius — ring is no longer a perfect circle.
     s.userData.orbitRadius = 1.4 + Math.random() * 0.5;
+    // Per-star spin rate so the stars rotate at different rates.
+    s.userData.spinSpeed = 1.2 + Math.random() * 2.4;
     marketingGroup.add(s);
     marketingStars.push(s);
   }
@@ -3214,7 +3216,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         const base = (s.userData.baseScale as number | undefined) ?? 1;
         const pop = base * (1 + Math.sin(elapsed * 3 + (s.userData.phase as number)) * 0.1);
         s.scale.setScalar(pop);
-        s.rotation.y += dt * 2;
+        const spin = (s.userData.spinSpeed as number | undefined) ?? 2;
+        s.rotation.y += dt * spin;
       }
       marketingGroup.position.z = 0.3 + Math.sin(elapsed * 0.6) * 0.1;
       // Spawn glitter at a random star ~6 times/sec.
