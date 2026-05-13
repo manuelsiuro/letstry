@@ -726,6 +726,57 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     godRays.push(m);
   }
 
+  // ---- Storefront awning ----
+  // Red+white striped canvas awning above the counter, tilted slightly
+  // forward toward the customers. A row of small warm bulbs hangs from
+  // the front edge.
+  const awningTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 512; cv.height = 96;
+    const ctx = cv.getContext("2d")!;
+    // Vertical stripes
+    const stripeW = 64;
+    for (let i = 0; i < 512 / stripeW; i++) {
+      ctx.fillStyle = i % 2 === 0 ? "#e04848" : "#f5e6c8";
+      ctx.fillRect(i * stripeW, 0, stripeW, 96);
+    }
+    // Scalloped bottom edge
+    ctx.fillStyle = "rgba(0,0,0,0)";
+    ctx.globalCompositeOperation = "destination-out";
+    for (let x = 0; x <= 512; x += 32) {
+      ctx.beginPath();
+      ctx.arc(x, 96, 16, 0, Math.PI, true);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = "source-over";
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const awning = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.6, 0.9),
+    new THREE.MeshStandardMaterial({
+      map: awningTex,
+      transparent: true,
+      roughness: 0.7,
+      side: THREE.DoubleSide,
+    }),
+  );
+  // Sloped forward (tilted toward customers): rotate around X so the back
+  // edge is higher than the front.
+  awning.rotation.x = -Math.PI / 2 + 0.35;
+  awning.position.set(0, 1.45, 0.7);
+  shopLayer.add(awning);
+  // Tiny bulb-string below the awning front edge.
+  const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfff0a8, fog: false });
+  const bulbGeo = new THREE.SphereGeometry(0.045, 8, 6);
+  for (let i = 0; i < 8; i++) {
+    const x = -1.6 + i * 0.46;
+    const b = new THREE.Mesh(bulbGeo, bulbMat);
+    b.position.set(x, 1.0, 1.05);
+    shopLayer.add(b);
+  }
+
   // Pizza disc on counter — placeholder until pizza.glb loads
   const pizza = new THREE.Group();
   pizza.position.set(0, counterTopY + 0.03, 0);
