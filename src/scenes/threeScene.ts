@@ -3647,6 +3647,13 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             // Got their pizza — hand them the box, and pop it briefly.
             c.pizzaBox.visible = true;
             c.group.userData.boxPulseStart = elapsed;
+            // Tiny coin sparkle above the customer — "thanks!" moment.
+            const sparklePos = new THREE.Vector3(
+              c.group.position.x,
+              c.group.position.y + 1.5,
+              c.group.position.z,
+            );
+            for (let i = 0; i < 2; i++) spawnParticle("sell", sparklePos);
             // Free the queue slot so the next customer can take it.
             releaseQueueSlot(c.queueSlot);
             c.queueSlot = -1;
