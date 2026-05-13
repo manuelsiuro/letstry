@@ -2208,6 +2208,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // Seconds remaining in which the camera holds at a dramatic close pose
   // before the normal ease resumes (used for first-cosmic / first-empire).
   let cosmicRevealHold = 0;
+  // Timestamp when the player most recently entered the final phase, used
+  // by the pizza-sun glow ramp.
+  let finalEnteredAt = -1;
   // Camera shake — decaying jitter applied on top of the eased cam position
   // when the player makes a pizza. Updated by subscribe + ticked in the
   // animate loop.
@@ -3286,12 +3289,22 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       }
     }
 
+    // Reset ramp when leaving final phase so the next entrance starts fresh.
+    if (!finalLayer.visible && finalEnteredAt >= 0) {
+      finalEnteredAt = -1;
+    }
     // Final pizza-sun
     if (finalLayer.visible) {
+      if (finalEnteredAt < 0) finalEnteredAt = elapsed;
       // Pizza disc faces the camera (XY plane); spin it around its forward
       // axis so toppings parade past as it rotates.
       pizzaSun.rotation.z = elapsed * 0.2;
-      sunGlow.intensity = 3 + Math.sin(elapsed * 2) * 0.6;
+      // Glow ramps 3 → 6 over 30s in-phase, then holds. The longer the
+      // player lingers in the final moment, the more intense the sun.
+      const heldFor = elapsed - finalEnteredAt;
+      const ramp = Math.min(1, heldFor / 30);
+      const base = 3 + ramp * 3;
+      sunGlow.intensity = base + Math.sin(elapsed * 2) * 0.6;
       // OMEGA TOPPING text orbits the sun on a wider tilted ring.
       omegaOrbit.angle += dt * omegaOrbit.speed;
       const oa = omegaOrbit.angle;
