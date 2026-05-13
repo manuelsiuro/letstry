@@ -3853,5 +3853,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     }
   });
 
+  // Scene stats on init — quick diagnostic of the polish stack.
+  // eslint-disable-next-line no-console
+  console.log(
+    `[scene] fx=${FX_ON ? "on" : "off"} perf=${LOW_POWER ? "low" : "high"} ` +
+    `dust=${DUST_COUNT} glitter=${GLITTER_POOL} particles=${PARTICLE_POOL_SIZE} ` +
+    `buildings=${buildingCount} bulbs=${awningBulbs.length} ` +
+    `streetlights=${streetlightSpots.length} moons=${pizzaMoons.length}`,
+  );
+
   return { canvas: renderer.domElement };
 }
