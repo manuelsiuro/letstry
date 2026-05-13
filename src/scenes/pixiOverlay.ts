@@ -43,6 +43,12 @@ export async function startPixiOverlay(mount: HTMLElement): Promise<void> {
     return { x: app.screen.width / 2, y: app.screen.height * 0.7 };
   }
 
+  // Sell popups rise from where the pizza is on the 3D counter — roughly
+  // canvas center, vertically just below middle.
+  function counterAnchor(): { x: number; y: number } {
+    return { x: app.screen.width * 0.5, y: app.screen.height * 0.55 };
+  }
+
   function spawnText(content: string, color: number, anchor = popupAnchor()): void {
     const style = new TextStyle({
       fontFamily: "system-ui, sans-serif",
@@ -161,7 +167,7 @@ export async function startPixiOverlay(mount: HTMLElement): Promise<void> {
     if (ev.type === "make") {
       spawnText("+1", 0xf2c46d);
     } else if (ev.type === "sell" && ev.amount) {
-      spawnText("+" + fmtMoney(ev.amount), 0x9be36b);
+      spawnText("+" + fmtMoney(ev.amount), 0x9be36b, counterAnchor());
     } else if (ev.type === "buy") {
       const anchor = popupAnchor();
       spawnSparkles({ x: anchor.x, y: anchor.y - 40 }, 0xffd54a, 18);
