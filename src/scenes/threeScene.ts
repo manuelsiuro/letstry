@@ -1213,7 +1213,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const armR = new THREE.Mesh(chefArmGeo, matWhite);
     armR.position.set(0.26, 1.1, 0.05);
     g.add(armR);
-    g.position.set(x, GROUND_Y, -0.85);
+    // Small position jitter so chef 1 and chef 2 don't sit on perfectly
+    // aligned x/z lines when both are present.
+    const xJitter = (Math.random() - 0.5) * 0.12;
+    const zJitter = (Math.random() - 0.5) * 0.06;
+    g.position.set(x + xJitter, GROUND_Y, -0.85 + zJitter);
     // Fake shadow disc at the chef's feet.
     const shadow = new THREE.Mesh(shadowGeo, shadowMat);
     shadow.rotation.x = -Math.PI / 2;
