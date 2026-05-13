@@ -1087,6 +1087,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     armL: THREE.Mesh;
     armR: THREE.Mesh;
     phase: number;
+    cycleScale: number;
     speechSprite: THREE.Sprite;
     nextSpeechAt: number;
     speechLife: number;
@@ -1239,6 +1240,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       group: g,
       armL, armR,
       phase,
+      cycleScale: 0.85 + Math.random() * 0.3,
       speechSprite,
       nextSpeechAt: 2 + Math.random() * 5,
       speechLife: 0,
@@ -3471,19 +3473,23 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       const c = chefs[i];
       const t = elapsed * 2 + c.phase;
       c.group.position.y = GROUND_Y + Math.sin(t) * 0.03;
-      // Gesture window: 0..6s with the chef's phase offset
-      const cycle = (elapsed + c.phase) % 6;
+      // Gesture cycle — base 6s scaled by per-chef cycleScale so each chef
+      // rotates through knead/throw/stretch at their own tempo.
+      const cs = c.cycleScale;
+      const cycle = (elapsed + c.phase) % (6 * cs);
+      const kneadEnd = 3.2 * cs;
+      const throwEnd = 4.6 * cs;
       let armLX = 0;
       let armRX = 0;
-      if (cycle < 3.2) {
+      if (cycle < kneadEnd) {
         // Knead — original swing
         armLX = Math.sin(t * 1.5) * 0.6 - 0.4;
         armRX = Math.sin(t * 1.5 + Math.PI) * 0.6 - 0.4;
         // Reset the per-cycle throw guard while we're outside the window.
         c.group.userData.thrownThisCycle = false;
-      } else if (cycle < 4.6) {
+      } else if (cycle < throwEnd) {
         // Throw — arms reach high, slight bob with the dough
-        const k = (cycle - 3.2) / 1.4; // 0..1
+        const k = (cycle - kneadEnd) / (throwEnd - kneadEnd); // 0..1
         // Bow → throw arc → catch
         const lift = Math.sin(k * Math.PI) * 1.6 - 0.2;
         armLX = -lift;
@@ -3500,7 +3506,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         }
       } else {
         // Stretch — arms out forward, slight side-to-side
-        const k = (cycle - 4.6) / 1.4;
+        const stretchEnd = 6 * cs;
+        const k = (cycle - throwEnd) / (stretchEnd - throwEnd);
         const sway = Math.sin(k * Math.PI * 2) * 0.15;
         armLX = -0.9 + sway;
         armRX = -0.9 - sway;
@@ -3510,7 +3517,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       // Body tilt — during the stretch (customer-facing) gesture, lean the
       // chef toward the queue (positive z direction). Outside the window
       // the rotation eases back to neutral.
-      const targetBodyY = cycle >= 4.6 && cycle < 6 ? Math.sin((cycle - 4.6) * Math.PI / 1.4) * 0.18 : 0;
+      const stretchEnd2 = 6 * cs;
+      const targetBodyY = cycle >= throwEnd && cycle < stretchEnd2 ? Math.sin((cycle - throwEnd) * Math.PI / (stretchEnd2 - throwEnd)) * 0.18 : 0;
       c.group.rotation.y = THREE.MathUtils.lerp(
         c.group.rotation.y, targetBodyY, Math.min(1, dt * 3),
       );
