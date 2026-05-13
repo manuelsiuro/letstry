@@ -580,6 +580,22 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       );
       antenna.position.set(0, height / 2 + 0.6, 0);
       b.add(antenna);
+      // Red aircraft-warning light on top — joins blinkWindows for the
+      // standard sin-driven flicker tick.
+      const warnLight = new THREE.Mesh(
+        new THREE.SphereGeometry(0.06, 8, 6),
+        new THREE.MeshStandardMaterial({
+          color: 0xff3344, emissive: 0xff3344, emissiveIntensity: 1.4, fog: false,
+        }),
+      );
+      warnLight.position.set(0, height / 2 + 1.25, 0);
+      b.add(warnLight);
+      blinkWindows.push({
+        mesh: warnLight,
+        phase: Math.random() * Math.PI * 2,
+        period: 1.5 + Math.random() * 1.0, // faster than building windows
+        threshold: 0.2, // mostly off
+      });
     } else if (Math.random() < 0.45) {
       // Rotating rooftop billboard sign — added as a CHILD OF cityLayer
       // (not the building) so its rotation animation is in world space and
