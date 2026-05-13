@@ -2646,7 +2646,15 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   }
 
   renderer.setAnimationLoop(() => {
-    const dt = clock.getDelta();
+    // Pause the scene when the tab is hidden — no render + we keep reading
+    // (and discarding) the clock so the next visible frame doesn't see a
+    // massive accumulated delta.
+    if (document.hidden) {
+      clock.getDelta(); // consume + drop
+      return;
+    }
+    // Clamp dt to avoid simulation explosions after long hidden spans.
+    const dt = Math.min(0.1, clock.getDelta());
     elapsed += dt;
     advance(dt);
 
