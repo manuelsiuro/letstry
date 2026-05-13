@@ -3294,9 +3294,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       }
     }
 
-    // Thrown dough — gravity arc, then fade.
+    // Thrown dough — gravity arc, then fade. Spawn a small puff at the
+    // moment the dough enters its fade window — visual "thwap" of landing.
     for (const d of thrownDoughs) {
       if (!d.active) continue;
+      const prevT = d.life / d.maxLife;
       d.life += dt;
       const t = d.life / d.maxLife;
       if (t >= 1) {
@@ -3313,6 +3315,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       // Fade in last 30%
       const op = t < 0.7 ? 1 : (1 - t) / 0.3;
       (d.mesh.material as THREE.MeshStandardMaterial).opacity = Math.max(0, op);
+      // One puff when crossing into fade window.
+      if (prevT < 0.7 && t >= 0.7) {
+        spawnParticle("make", d.mesh.position.clone());
+      }
     }
 
     // Bikes: deliver-then-return state machine
