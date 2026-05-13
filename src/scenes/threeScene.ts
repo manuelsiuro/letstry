@@ -860,6 +860,34 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const pizza = new THREE.Group();
   pizza.position.set(0, counterTopY + 0.03, 0);
   shopLayer.add(pizza);
+
+  // Counter pizza steam — 3 sprites looping upward from the disc.
+  type CounterSteam = { sprite: THREE.Sprite; offset: number };
+  const counterSteamTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 64; cv.height = 64;
+    const ctx = cv.getContext("2d")!;
+    const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+    g.addColorStop(0, "rgba(220,220,220,0.85)");
+    g.addColorStop(0.6, "rgba(200,200,200,0.35)");
+    g.addColorStop(1, "rgba(180,180,180,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const counterSteamSprites: CounterSteam[] = [];
+  for (let i = 0; i < 3; i++) {
+    const mat = new THREE.SpriteMaterial({
+      map: counterSteamTex, transparent: true, opacity: 0, depthWrite: false,
+    });
+    const sp = new THREE.Sprite(mat);
+    sp.position.copy(pizza.position);
+    sp.scale.setScalar(0.32);
+    shopLayer.add(sp);
+    counterSteamSprites.push({ sprite: sp, offset: i / 3 });
+  }
   const pizzaPlaceholder = new THREE.Mesh(
     new THREE.CylinderGeometry(0.45, 0.45, 0.06, 24),
     new THREE.MeshStandardMaterial({ color: 0xf2c46d, roughness: 0.5, emissive: 0x331100, emissiveIntensity: 0.15 }),
@@ -2987,6 +3015,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // OPEN sign — gentle pendulum sway while shop is visible.
     if (shopLayer.visible) {
       openSignPivot.rotation.z = Math.sin(elapsed * 1.2) * 0.12;
+      // Counter pizza steam — same loop pattern as oven steam.
+      for (const st of counterSteamSprites) {
+        const t = ((elapsed * 0.4 + st.offset) % 1);
+        st.sprite.position.y = pizza.position.y + 0.05 + t * 0.8;
+        st.sprite.position.x = pizza.position.x + Math.sin(elapsed * 1.6 + st.offset * 4) * 0.08;
+        st.sprite.material.opacity = (1 - t) * 0.55;
+        st.sprite.scale.setScalar(0.3 + t * 0.5);
+      }
       // Wall clock — accelerated time: minute hand completes a revolution
       // every 6s, hour hand 12× slower (= every 72s).
       minuteHand.rotation.z = -elapsed * (Math.PI * 2 / 6);
