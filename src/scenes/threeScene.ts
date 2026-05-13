@@ -465,6 +465,54 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   sign.position.set(0, 2.2, 0.62);
   shopLayer.add(sign);
 
+  // ---- Hanging "OPEN" sign ----
+  // Small green neon plaque hanging from the shop edge by a thin string.
+  // Sways slightly with a sin so it feels alive.
+  const openTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 256; cv.height = 128;
+    const ctx = cv.getContext("2d")!;
+    ctx.fillStyle = "#0a0e1a";
+    ctx.fillRect(0, 0, 256, 128);
+    ctx.strokeStyle = "#4dff88";
+    ctx.lineWidth = 5;
+    ctx.strokeRect(10, 10, 236, 108);
+    ctx.fillStyle = "#9bffb9";
+    ctx.font = "bold 72px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#4dff88";
+    ctx.shadowBlur = 18;
+    ctx.fillText("OPEN", 128, 70);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const openSignPivot = new THREE.Group();
+  openSignPivot.position.set(1.8, 1.85, 0.7);
+  shopLayer.add(openSignPivot);
+  // String connecting the pivot to the sign body
+  const openString = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.008, 0.008, 0.3, 6),
+    new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 }),
+  );
+  openString.position.y = -0.15;
+  openSignPivot.add(openString);
+  const openSignMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5, 0.25),
+    new THREE.MeshBasicMaterial({ map: openTex, transparent: true, fog: false }),
+  );
+  openSignMesh.position.y = -0.42;
+  openSignPivot.add(openSignMesh);
+  // Back side so it reads OPEN from both directions (mirror).
+  const openSignBack = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5, 0.25),
+    new THREE.MeshBasicMaterial({ map: openTex, transparent: true, fog: false }),
+  );
+  openSignBack.position.y = -0.42;
+  openSignBack.rotation.y = Math.PI;
+  openSignPivot.add(openSignBack);
+
   // Volumetric "god-rays" — two slanted additive translucent planes hanging
   // down from the neon sign, picking out the air-light beam. Pulses softly
   // with the neon glow timer.
@@ -2311,6 +2359,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         pos.setXYZ(i, x, y, z);
       }
       pos.needsUpdate = true;
+    }
+
+    // OPEN sign — gentle pendulum sway while shop is visible.
+    if (shopLayer.visible) {
+      openSignPivot.rotation.z = Math.sin(elapsed * 1.2) * 0.12;
     }
 
     // Neon pulse
