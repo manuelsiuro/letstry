@@ -1215,12 +1215,13 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     fleet.push(f);
   }
 
-  type Drone = THREE.Group & { userData: { angle: number; radius: number; speed: number; tilt: number } };
+  type Drone = THREE.Group & { userData: { angle: number; radius: number; speed: number; tilt: number; led?: THREE.Mesh; ledPhase?: number } };
   const drones: Drone[] = [];
 
   // Shared geos/materials for the drone payload box — created once, reused.
   const droneBoxBodyGeo = new THREE.BoxGeometry(0.32, 0.07, 0.32);
   const droneBoxLidGeo = new THREE.BoxGeometry(0.34, 0.02, 0.34);
+  const droneLEDGeo = new THREE.SphereGeometry(0.025, 10, 8);
   const droneBoxBodyMat = new THREE.MeshStandardMaterial({
     color: 0xe04848, emissive: 0x331111, emissiveIntensity: 0.3, roughness: 0.5,
   });
@@ -1241,6 +1242,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const lid = new THREE.Mesh(droneBoxLidGeo, droneBoxLidMat);
     lid.position.y = 0.045;
     payload.add(lid);
+    // Tiny "delivery in progress" LED on top of the lid — blinks per-drone.
+    const ledMat = new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: 1, fog: false });
+    const led = new THREE.Mesh(droneLEDGeo, ledMat);
+    led.position.set(0.1, 0.07, 0.1);
+    payload.add(led);
     // Tether: thin cylinder going up from the box top to the drone body.
     const tether = new THREE.Mesh(
       new THREE.CylinderGeometry(0.01, 0.01, 0.25, 6),
@@ -1250,6 +1256,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     payload.add(tether);
     payload.position.y = -0.4;
     d.add(payload);
+    d.userData.led = led;
+    d.userData.ledPhase = Math.random() * Math.PI * 2;
     d.userData.angle = Math.random() * Math.PI * 2;
     // Spread across two orbit shells so the swarm reads as a swarm,
     // not a single ring overlapping Earth.
@@ -2194,6 +2202,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         const tilt = d.userData.tilt;
         d.position.set(Math.cos(a) * r, tilt + Math.sin(a * 2) * 0.2, Math.sin(a) * r);
         d.rotation.y = -a + Math.PI / 2;
+        // Payload LED — fast square-wave blink, per-drone phase.
+        if (d.userData.led) {
+          const v = Math.sin(elapsed * 4 + (d.userData.ledPhase ?? 0));
+          const mat = d.userData.led.material as THREE.MeshBasicMaterial;
+          mat.opacity = v > 0 ? 1 : 0.15;
+        }
       }
 
       // ---- Multiverse ghosts ----
