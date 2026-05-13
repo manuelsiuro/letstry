@@ -2226,6 +2226,33 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   cheeseDisc.rotation.x = Math.PI / 2;
   pizzaSun.add(cheeseDisc);
 
+  // Ω brand stamp on the cheese surface — brand-matches the orbiting
+  // OMEGA TOPPING text sprite.
+  const omegaStampTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 256; cv.height = 256;
+    const ctx = cv.getContext("2d")!;
+    ctx.clearRect(0, 0, 256, 256);
+    ctx.font = "bold 220px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(180, 60, 20, 0.55)";
+    ctx.shadowColor = "rgba(120, 30, 0, 0.6)";
+    ctx.shadowBlur = 16;
+    ctx.fillText("Ω", 128, 138);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const omegaStamp = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.4, 2.4),
+    new THREE.MeshBasicMaterial({
+      map: omegaStampTex, transparent: true, depthWrite: false, fog: false,
+    }),
+  );
+  omegaStamp.position.z = 0.18; // sits just above the cheese surface
+  pizzaSun.add(omegaStamp);
+
   // Sauce pools — slightly darker circles randomly placed on the cheese
   const sauceGeo = new THREE.CircleGeometry(0.35, 24);
   const sauceMat = new THREE.MeshStandardMaterial({
