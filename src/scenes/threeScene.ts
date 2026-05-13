@@ -1375,6 +1375,13 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     });
     const park = parkSpot(bikes.length);
     group.position.copy(park);
+    // Fake oval shadow under the bike — narrower than chef shadow so it
+    // fits the bike footprint.
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = -park.y + GROUND_Y + 0.001; // world ground regardless of bike Y
+    shadow.scale.set(0.55, 0.9, 1);
+    group.add(shadow);
     localLayer.add(group);
     bikes.push({
       group,
