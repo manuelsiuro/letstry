@@ -330,6 +330,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   shopLayer.add(ground);
 
   // A few darker, even shinier "puddle" patches in front of the shop.
+  // Track them so the tick can apply a slow scale ripple — subtle wet-
+  // ground motion without simulating real water.
+  type Puddle = { mesh: THREE.Mesh; baseX: number; baseZ: number; phase: number };
+  const puddles: Puddle[] = [];
   const puddleMat = new THREE.MeshStandardMaterial({
     color: 0x0a1226, roughness: 0.15, metalness: 0.75,
   });
@@ -340,16 +344,17 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       puddleMat,
     );
     puddle.rotation.x = -Math.PI / 2;
-    // Sit just above the ground to avoid z-fighting
     puddle.position.set(
       (Math.random() - 0.5) * 6,
       GROUND_Y + 0.001,
       1.5 + Math.random() * 2.5,
     );
-    // Squash to ellipse for variety
-    puddle.scale.x = 1 + Math.random() * 0.5;
-    puddle.scale.z = 0.6 + Math.random() * 0.5;
+    const baseX = 1 + Math.random() * 0.5;
+    const baseZ = 0.6 + Math.random() * 0.5;
+    puddle.scale.x = baseX;
+    puddle.scale.z = baseZ;
     shopLayer.add(puddle);
+    puddles.push({ mesh: puddle, baseX, baseZ, phase: Math.random() * Math.PI * 2 });
   }
 
   // ---- Streetlights ----
@@ -3191,6 +3196,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       // Tassels sway with a phase offset so the fringe ripples in a breeze.
       for (const t of tassels) {
         t.pivot.rotation.z = Math.sin(elapsed * 1.8 + t.phase) * 0.18;
+      }
+      // Puddle ripples — slow scale oscillation, off-axis for natural feel.
+      for (const p of puddles) {
+        p.mesh.scale.x = p.baseX + Math.sin(elapsed * 0.8 + p.phase) * 0.05;
+        p.mesh.scale.z = p.baseZ + Math.cos(elapsed * 1.1 + p.phase) * 0.05;
       }
     }
 
