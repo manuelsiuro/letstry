@@ -1058,8 +1058,15 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     ctx.strokeStyle = "rgba(0,0,0,0.85)";
     ctx.lineWidth = 4;
     ctx.stroke();
-    // Text
-    ctx.fillStyle = "#222";
+    // Per-phrase text color — each chef line carries its own energy.
+    const phraseColors: Record<string, string> = {
+      "PIZZA!":     "#c93030",
+      "HOT!":       "#e07b00",
+      "READY!":     "#2a8a2a",
+      "MAMMA MIA!": "#7a2ad8",
+      "FRESH!":     "#0a7da8",
+    };
+    ctx.fillStyle = phraseColors[phrase] ?? "#222";
     ctx.font = "bold 42px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
