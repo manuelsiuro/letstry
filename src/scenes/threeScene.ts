@@ -160,13 +160,41 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const shopLayer = new THREE.Group();
   scene.add(shopLayer);
 
+  // Wet-asphalt ground: low roughness + slight metalness so the neon sign,
+  // building windows, and rooftop signs reflect on the floor — sells the
+  // "rain-slick city street" look.
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(40, 40),
-    new THREE.MeshStandardMaterial({ color: 0x1a1f2e, roughness: 0.95 }),
+    new THREE.MeshStandardMaterial({
+      color: 0x12182a, roughness: 0.45, metalness: 0.5,
+    }),
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = GROUND_Y;
   shopLayer.add(ground);
+
+  // A few darker, even shinier "puddle" patches in front of the shop.
+  const puddleMat = new THREE.MeshStandardMaterial({
+    color: 0x0a1226, roughness: 0.15, metalness: 0.75,
+  });
+  for (let i = 0; i < 5; i++) {
+    const radius = 0.6 + Math.random() * 1.2;
+    const puddle = new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 24),
+      puddleMat,
+    );
+    puddle.rotation.x = -Math.PI / 2;
+    // Sit just above the ground to avoid z-fighting
+    puddle.position.set(
+      (Math.random() - 0.5) * 6,
+      GROUND_Y + 0.001,
+      1.5 + Math.random() * 2.5,
+    );
+    // Squash to ellipse for variety
+    puddle.scale.x = 1 + Math.random() * 0.5;
+    puddle.scale.z = 0.6 + Math.random() * 0.5;
+    shopLayer.add(puddle);
+  }
 
   // ---- Nighttime city backdrop ----
   // Procedural row of building silhouettes with random lit windows on a
