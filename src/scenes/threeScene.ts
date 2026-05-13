@@ -3362,6 +3362,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       d.mesh.position.z += d.vel.z * dt;
       d.mesh.rotation.x += dt * 8;
       d.mesh.rotation.z += dt * 6;
+      // Slight squish/stretch — vertical stretch on the way up, squat on
+      // the way down (compress vertically once vel.y < 0).
+      const sy = d.vel.y > 0 ? 1.0 + Math.min(0.25, d.vel.y * 0.06) : 1.0 - Math.min(0.2, -d.vel.y * 0.04);
+      d.mesh.scale.set(1, sy, 1);
       // Fade in last 30%
       const op = t < 0.7 ? 1 : (1 - t) / 0.3;
       (d.mesh.material as THREE.MeshStandardMaterial).opacity = Math.max(0, op);
