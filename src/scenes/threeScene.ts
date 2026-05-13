@@ -1089,6 +1089,75 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   );
   cosmicLayer.add(stars);
 
+  // ---- Shooting stars ----
+  // Pool of 4 streaks that occasionally fly across the cosmic field. Each
+  // is an elongated plane with a gradient texture (bright at one end,
+  // tapering to transparent) — reads as a meteor trail.
+  const shootingStarTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 128; cv.height = 8;
+    const ctx = cv.getContext("2d")!;
+    const g = ctx.createLinearGradient(0, 0, 128, 0);
+    g.addColorStop(0, "rgba(255,255,255,0)");
+    g.addColorStop(0.7, "rgba(255,250,220,0.85)");
+    g.addColorStop(1, "rgba(255,255,255,1)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 8);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  type ShootingStar = {
+    mesh: THREE.Mesh;
+    active: boolean;
+    life: number;
+    duration: number;
+    startPos: THREE.Vector3;
+    endPos: THREE.Vector3;
+  };
+  const shootingStars: ShootingStar[] = [];
+  const shootingStarMat = new THREE.MeshBasicMaterial({
+    map: shootingStarTex,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    fog: false,
+  });
+  for (let i = 0; i < 4; i++) {
+    const geo = new THREE.PlaneGeometry(3.5, 0.18);
+    const m = new THREE.Mesh(geo, shootingStarMat.clone());
+    m.visible = false;
+    cosmicLayer.add(m);
+    shootingStars.push({
+      mesh: m,
+      active: false,
+      life: 0,
+      duration: 0.9,
+      startPos: new THREE.Vector3(),
+      endPos: new THREE.Vector3(),
+    });
+  }
+  let nextShootingStarAt = 0;
+
+  function spawnShootingStar(): void {
+    const slot = shootingStars.find((s) => !s.active);
+    if (!slot) return;
+    // Random off-screen origin → opposite side of cosmic field.
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const startX = side * (12 + Math.random() * 4);
+    const startY = 2 + Math.random() * 6;
+    const startZ = -8 - Math.random() * 6;
+    const endX = -side * (12 + Math.random() * 4);
+    const endY = startY - 2 - Math.random() * 3;
+    const endZ = startZ + (Math.random() - 0.5) * 3;
+    slot.startPos.set(startX, startY, startZ);
+    slot.endPos.set(endX, endY, endZ);
+    slot.life = 0;
+    slot.duration = 0.7 + Math.random() * 0.6;
+    slot.active = true;
+    slot.mesh.visible = true;
+  }
+
   // Wormhole — drifts behind Earth during cosmic+ phases
   const wormhole = new THREE.Group();
   wormhole.position.set(-6, 1.5, -4);
@@ -2188,6 +2257,35 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       earth.rotation.y = elapsed * 0.15;
       stars.rotation.y = elapsed * 0.005;
       wormhole.rotation.z = elapsed * 0.6;
+      // Shooting stars: tick active ones, possibly spawn a new one.
+      if (elapsed >= nextShootingStarAt) {
+        spawnShootingStar();
+        nextShootingStarAt = elapsed + 3 + Math.random() * 5;
+      }
+      for (const ss of shootingStars) {
+        if (!ss.active) continue;
+        ss.life += dt;
+        const k = ss.life / ss.duration;
+        if (k >= 1) {
+          ss.active = false;
+          ss.mesh.visible = false;
+          continue;
+        }
+        ss.mesh.position.lerpVectors(ss.startPos, ss.endPos, k);
+        // Orient along travel direction
+        const dir = new THREE.Vector3().subVectors(ss.endPos, ss.startPos);
+        ss.mesh.lookAt(ss.mesh.position.clone().add(dir));
+        // Plane normal default is +Z; we want the long axis along travel.
+        // lookAt orients -Z toward the look target → the plane is now
+        // perpendicular to the travel direction, which is wrong.
+        // Instead: rotate so the plane's +X (width) points along travel.
+        const yaw = Math.atan2(dir.x, dir.z);
+        ss.mesh.rotation.set(0, yaw + Math.PI / 2, 0);
+        const mat = ss.mesh.material as THREE.MeshBasicMaterial;
+        // Fade in then out — peak around t=0.3.
+        const fade = k < 0.3 ? k / 0.3 : 1 - (k - 0.3) / 0.7;
+        mat.opacity = Math.max(0, fade);
+      }
       for (const p of planets) {
         p.userData.angle += dt * p.userData.speed;
         const a = p.userData.angle;
