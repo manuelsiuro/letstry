@@ -1738,6 +1738,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   }
   let nextShootingStarAt = 0;
 
+  // Color palette for shooting stars — material.color tints the gradient.
+  const shootingStarColors = [0xffffff, 0xa6e6ff, 0xfff0a0, 0xffb0e0];
+
   function spawnShootingStar(): void {
     const slot = shootingStars.find((s) => !s.active);
     if (!slot) return;
@@ -1755,6 +1758,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     slot.duration = 0.7 + Math.random() * 0.6;
     slot.active = true;
     slot.mesh.visible = true;
+    // Tint this trip — material is per-slot so each can carry its own color.
+    const tint = shootingStarColors[Math.floor(Math.random() * shootingStarColors.length)];
+    (slot.mesh.material as THREE.MeshBasicMaterial).color.setHex(tint);
   }
 
   // Wormhole — drifts behind Earth during cosmic+ phases
