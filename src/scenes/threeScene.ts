@@ -338,6 +338,71 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     shopLayer.add(lamp);
   }
 
+  // ---- Background traffic ----
+  // A single car that loops periodically across the street far in front of
+  // the shop, driving right-to-left or left-to-right with headlights and
+  // taillights. Hidden between trips.
+  const carBody = new THREE.Group();
+  carBody.visible = false;
+  shopLayer.add(carBody);
+  const carHullMat = new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.5, metalness: 0.6 });
+  const carBaseMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, 0.45, 0.7),
+    carHullMat,
+  );
+  carBaseMesh.position.y = 0.25;
+  carBody.add(carBaseMesh);
+  const carRoofMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.95, 0.32, 0.65),
+    carHullMat,
+  );
+  carRoofMesh.position.set(-0.05, 0.6, 0);
+  carBody.add(carRoofMesh);
+  const carWheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+  const carWheelGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.1, 12);
+  carWheelGeo.rotateZ(Math.PI / 2);
+  for (const [wx, wz] of [[0.55, 0.32], [0.55, -0.32], [-0.55, 0.32], [-0.55, -0.32]] as Array<[number, number]>) {
+    const w = new THREE.Mesh(carWheelGeo, carWheelMat);
+    w.position.set(wx, 0.18, wz);
+    carBody.add(w);
+  }
+  const carHeadMat = new THREE.MeshBasicMaterial({ color: 0xfff4a0, fog: false });
+  const carTailMat = new THREE.MeshBasicMaterial({ color: 0xff3333, fog: false });
+  const carHeadGeo = new THREE.SphereGeometry(0.08, 8, 6);
+  for (const [hx, hz] of [[0.82, 0.25], [0.82, -0.25]] as Array<[number, number]>) {
+    const h = new THREE.Mesh(carHeadGeo, carHeadMat);
+    h.position.set(hx, 0.3, hz);
+    carBody.add(h);
+  }
+  for (const [tx, tz] of [[-0.82, 0.25], [-0.82, -0.25]] as Array<[number, number]>) {
+    const t = new THREE.Mesh(carHeadGeo, carTailMat);
+    t.position.set(tx, 0.3, tz);
+    carBody.add(t);
+  }
+  // Car position state
+  const carState = {
+    active: false,
+    startX: 0,
+    endX: 0,
+    progress: 0,
+    duration: 6,
+    z: 4.2,
+    facing: 1, // +1 = +X direction, -1 = -X
+  };
+  let nextCarAt = 6 + Math.random() * 6;
+
+  function spawnCar(): void {
+    carState.facing = Math.random() < 0.5 ? 1 : -1;
+    carState.startX = carState.facing > 0 ? -10 : 10;
+    carState.endX = -carState.startX;
+    carState.progress = 0;
+    carState.duration = 5 + Math.random() * 3;
+    carState.z = 4 + Math.random() * 0.8;
+    carState.active = true;
+    carBody.visible = true;
+    carBody.rotation.y = carState.facing > 0 ? Math.PI / 2 : -Math.PI / 2;
+  }
+
   // ---- Nighttime city backdrop ----
   // Procedural row of building silhouettes with random lit windows on a
   // ring behind the shop. Reads as "you're a pizzeria on a city street"
@@ -2533,6 +2598,24 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       const base = p.flavor === "make" ? 0.6 : 0.5;
       const growth = p.flavor === "make" ? 1 + t * 1.8 : 1 + t * 0.4;
       p.sprite.scale.setScalar(base * growth);
+    }
+
+    // Background traffic — schedule + animate.
+    if (shopLayer.visible) {
+      if (!carState.active && elapsed >= nextCarAt) {
+        spawnCar();
+      }
+      if (carState.active) {
+        carState.progress += dt / carState.duration;
+        if (carState.progress >= 1) {
+          carState.active = false;
+          carBody.visible = false;
+          nextCarAt = elapsed + 10 + Math.random() * 8;
+        } else {
+          const x = carState.startX + (carState.endX - carState.startX) * carState.progress;
+          carBody.position.set(x, GROUND_Y, carState.z);
+        }
+      }
     }
 
     // City window flicker + rooftop sign spin — only when shop is visible.
