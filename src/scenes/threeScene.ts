@@ -298,7 +298,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const rim = new THREE.DirectionalLight(0xff7a4a, 0.9);
   rim.position.set(0, 3, -4);
   scene.add(rim);
-  scene.add(new THREE.AmbientLight(0x404060, 0.55));
+  const ambient = new THREE.AmbientLight(0x404060, 0.55);
+  scene.add(ambient);
   // Neon sign glow — pulses with the sign canvas.
   const neonGlow = new THREE.PointLight(0xff3b88, 1.4, 8);
   neonGlow.position.set(0, 2.2, 0.4);
@@ -3253,6 +3254,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // Neon pulse
     const neonAmt = Math.sin(elapsed * 3) * 0.4;
     neonGlow.intensity = 1.2 + neonAmt;
+    // Ambient also subtly breathes — tied to the neon (which is the loudest
+    // light source in shop/local) so the scene exhales together.
+    ambient.intensity = 0.55 + neonAmt * 0.04;
     // God-rays follow the same pulse — keeps the beams synced to the sign.
     if (shopLayer.visible) {
       for (const r of godRays) {
