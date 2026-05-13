@@ -2103,6 +2103,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   }
   let nextWormholeSliceAt = 0;
 
+  // Timestamp of the last wormhole slice spawn — drives a brief flare on
+  // the warp rings.
+  let lastWormholeSpawnAt = -Infinity;
+
   function spawnWormholeSlice(): void {
     const slot = wormholeSlices.find((s) => !s.active);
     if (!slot) return;
@@ -2120,6 +2124,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     slot.active = true;
     slot.sprite.visible = true;
     slot.sprite.material.rotation = Math.random() * Math.PI * 2;
+    // Capture the spawn time so the cosmic tick can flare the warp rings
+    // for the next ~0.3s, suggesting the portal "pumps" with each ejection.
+    lastWormholeSpawnAt = elapsed;
   }
 
   // ---- Multiverse: ghost-Earth duplicates that drift around the main planet
@@ -3643,10 +3650,17 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       stars.rotation.y = elapsed * 0.005;
       wormhole.rotation.z = elapsed * 0.6;
       // Warp rings spin on independent axes — the portal feels "active".
-      for (const r of warpRings) {
+      // Brief flare on the warp rings right after the wormhole ejects a
+      // slice — the portal "pumps".
+      const sinceSpawn = elapsed - lastWormholeSpawnAt;
+      const flareBoost = sinceSpawn < 0.35 ? (1 - sinceSpawn / 0.35) * 0.5 : 0;
+      for (let i = 0; i < warpRings.length; i++) {
+        const r = warpRings[i];
         r.mesh.rotation.x += dt * r.spinX;
         r.mesh.rotation.y += dt * r.spinY;
         r.mesh.rotation.z += dt * r.spinZ;
+        const baseOp = 0.7 - i * 0.15;
+        (r.mesh.material as THREE.MeshBasicMaterial).opacity = baseOp + flareBoost;
       }
       // Wormhole occasionally ejects a pizza slice.
       if (elapsed >= nextWormholeSliceAt) {
