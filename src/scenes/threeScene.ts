@@ -47,7 +47,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   let bloomPass: UnrealBloomPass | null = null;
   let chromAberrPass: ShaderPass | null = null;
   let scanlinePass: ShaderPass | null = null;
-  if (FX_ON) {
+  if (FX_ON && !LOW_POWER) {
     composer = new EffectComposer(renderer);
     composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     composer.setSize(mount.clientWidth, mount.clientHeight);
