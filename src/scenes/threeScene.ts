@@ -1001,67 +1001,92 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   }
 
   // ---- Particle puff pool ----
-  // Two flavors: "make" = flour/dough puff (cream sphere, rises slow + fades),
-  //              "sell" = coin sparkle (gold cube, rises + spins + fades).
+  // THREE.Sprite is camera-aligned by design — no manual billboarding, no
+  // depth-test gymnastics. Cleaner than the previous PlaneGeometry+manual-
+  // quaternion hack and renders predictably on every backend.
   type Particle = {
-    mesh: THREE.Mesh;
+    sprite: THREE.Sprite;
     flavor: "make" | "sell";
     life: number;
     maxLife: number;
     vel: THREE.Vector3;
   };
-  const PARTICLE_POOL_SIZE = 32;
+  const PARTICLE_POOL_SIZE = 48;
   const particles: Particle[] = [];
-  // Sprite-like billboards so the puff always faces the camera and reads
-  // as a glowing dot regardless of angle. Additive blend + no depth write
-  // so they layer on top without occluding other transparent geometry.
-  const puffGeo = new THREE.PlaneGeometry(0.8, 0.8);
-  const coinGeo = new THREE.PlaneGeometry(0.6, 0.6);
-  // Puff is bright white so the dough/flour cloud reads on any background.
-  // Coin is saturated yellow with red accents so it pops over the cream
-  // counter top.
-  const puffMat = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.95,
-    blending: THREE.NormalBlending,
-    depthWrite: false,
-    depthTest: false,
-    side: THREE.DoubleSide,
-  });
-  const coinMat = new THREE.MeshBasicMaterial({
-    color: 0xffc91a,
-    transparent: true,
-    opacity: 1,
-    blending: THREE.NormalBlending,
-    depthWrite: false,
-    depthTest: false,
-    side: THREE.DoubleSide,
-  });
+
+  function makePuffTexture(): THREE.CanvasTexture {
+    const cv = document.createElement("canvas");
+    cv.width = 128;
+    cv.height = 128;
+    const ctx = cv.getContext("2d")!;
+    const grd = ctx.createRadialGradient(64, 64, 4, 64, 64, 60);
+    grd.addColorStop(0, "rgba(255,255,255,1)");
+    grd.addColorStop(0.4, "rgba(255,250,235,0.85)");
+    grd.addColorStop(0.8, "rgba(255,240,200,0.25)");
+    grd.addColorStop(1, "rgba(255,240,200,0)");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, 128, 128);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+  function makeCoinTexture(): THREE.CanvasTexture {
+    const cv = document.createElement("canvas");
+    cv.width = 128;
+    cv.height = 128;
+    const ctx = cv.getContext("2d")!;
+    // Yellow disc with darker rim — reads as a coin even at small sizes.
+    const grd = ctx.createRadialGradient(64, 60, 6, 64, 64, 58);
+    grd.addColorStop(0, "rgba(255,255,210,1)");
+    grd.addColorStop(0.5, "rgba(255,200,40,1)");
+    grd.addColorStop(0.95, "rgba(180,120,10,1)");
+    grd.addColorStop(1, "rgba(180,120,10,0)");
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(64, 64, 58, 0, Math.PI * 2);
+    ctx.fill();
+    // "$" mark in the centre
+    ctx.fillStyle = "rgba(120,70,0,0.9)";
+    ctx.font = "bold 70px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("$", 64, 66);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  const puffTex = makePuffTexture();
+  const coinTex = makeCoinTexture();
+
   function spawnParticle(flavor: "make" | "sell"): void {
     if (particles.length >= PARTICLE_POOL_SIZE) return;
     const isMake = flavor === "make";
-    const mat = (isMake ? puffMat : coinMat).clone();
-    const m = new THREE.Mesh(isMake ? puffGeo : coinGeo, mat);
-    // Spawn near the pizza on the counter but a little above the counter
-    // top so the puff is visible from frame 1 rather than poking out from
-    // inside the counter mesh.
+    const mat = new THREE.SpriteMaterial({
+      map: isMake ? puffTex : coinTex,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+      depthTest: true,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.setScalar(isMake ? 0.6 : 0.5);
     const spread = isMake ? 0.45 : 0.6;
-    m.position.set(
+    sprite.position.set(
       (Math.random() - 0.5) * spread,
-      counterTopY + 0.35,
+      counterTopY + 0.3,
       (Math.random() - 0.5) * spread * 0.6,
     );
-    const vy = isMake ? 0.5 + Math.random() * 0.3 : 1.0 + Math.random() * 0.3;
+    const vy = isMake ? 0.5 + Math.random() * 0.3 : 1.1 + Math.random() * 0.3;
     const vx = (Math.random() - 0.5) * 0.3;
     const vz = (Math.random() - 0.5) * 0.2;
-    m.renderOrder = 999;
-    shopLayer.add(m);
+    sprite.renderOrder = 999;
+    shopLayer.add(sprite);
     particles.push({
-      mesh: m,
+      sprite,
       flavor,
       life: 0,
-      maxLife: isMake ? 1.4 : 1.6,
+      maxLife: isMake ? 1.0 : 1.3,
       vel: new THREE.Vector3(vx, vy, vz),
     });
   }
@@ -1214,28 +1239,22 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       p.life += dt;
       const t = p.life / p.maxLife;
       if (t >= 1) {
-        shopLayer.remove(p.mesh);
-        (p.mesh.material as THREE.Material).dispose();
+        shopLayer.remove(p.sprite);
+        p.sprite.material.dispose();
         particles.splice(i, 1);
         continue;
       }
-      // Integrate velocity, apply slight gravity for make-puffs, lift+drift coins.
-      p.mesh.position.x += p.vel.x * dt;
-      p.mesh.position.y += p.vel.y * dt;
-      p.mesh.position.z += p.vel.z * dt;
-      // Both flavors rise steadily; no gravity (these are puffs of flour /
-      // floating coins, not projectiles).
+      p.sprite.position.x += p.vel.x * dt;
+      p.sprite.position.y += p.vel.y * dt;
+      p.sprite.position.z += p.vel.z * dt;
       if (p.flavor === "sell") {
-        // Coins drift outward a bit as they rise
         p.vel.y += 0.2 * dt;
       }
-      const mat = p.mesh.material as THREE.MeshBasicMaterial;
-      mat.opacity = (1 - t) * (p.flavor === "make" ? 0.95 : 1);
-      // Puff grows; coin holds size then fades
-      const scale = p.flavor === "make" ? 1 + t * 1.8 : 1 + t * 0.4;
-      p.mesh.scale.setScalar(scale);
-      // Billboard — always face the camera
-      p.mesh.quaternion.copy(camera.quaternion);
+      p.sprite.material.opacity = (1 - t);
+      // Puff expands; coin stays roughly the same size.
+      const base = p.flavor === "make" ? 0.6 : 0.5;
+      const growth = p.flavor === "make" ? 1 + t * 1.8 : 1 + t * 0.4;
+      p.sprite.scale.setScalar(base * growth);
     }
 
     // Neon pulse
