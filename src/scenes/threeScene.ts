@@ -3223,6 +3223,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // OPEN sign — gentle pendulum sway while shop is visible.
     if (shopLayer.visible) {
       openSignPivot.rotation.z = Math.sin(elapsed * 1.2) * 0.12;
+      // Streetlight cones share a power-line — small synchronized flicker
+      // around the 0.18 base opacity.
+      lampConeMat.opacity = 0.18 + Math.sin(elapsed * 7.3) * 0.02 + Math.sin(elapsed * 19) * 0.015;
       // Counter pizza steam — same loop pattern as oven steam.
       for (const st of counterSteamSprites) {
         const t = ((elapsed * 0.4 + st.offset) % 1);
