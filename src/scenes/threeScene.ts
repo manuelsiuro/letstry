@@ -1591,6 +1591,57 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   );
   finalLayer.add(finalStars);
 
+  // ---- Pizza moons ----
+  // 4 small pizza discs orbiting the pizza-sun. Each is a mini version
+  // of the sun: crust torus + cheese disc + a few pepperoni dots.
+  type PizzaMoon = { group: THREE.Group; angle: number; radius: number; speed: number; tilt: number };
+  const pizzaMoons: PizzaMoon[] = [];
+  const moonCrustMat = new THREE.MeshStandardMaterial({
+    color: 0xc97a3a, emissive: 0xff5522, emissiveIntensity: 0.7, roughness: 0.55,
+  });
+  const moonCheeseMat = new THREE.MeshStandardMaterial({
+    color: 0xffd87a, emissive: 0xffb04a, emissiveIntensity: 1.0, roughness: 0.55,
+  });
+  const moonPepMat = new THREE.MeshStandardMaterial({
+    color: 0xb22222, emissive: 0xff3322, emissiveIntensity: 0.5, roughness: 0.5,
+  });
+  for (let i = 0; i < 4; i++) {
+    const m = new THREE.Group();
+    const moonScale = 0.18 + i * 0.05;
+    const crust = new THREE.Mesh(
+      new THREE.TorusGeometry(1.0, 0.18, 10, 36),
+      moonCrustMat,
+    );
+    m.add(crust);
+    const cheese = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.0, 1.0, 0.1, 24),
+      moonCheeseMat,
+    );
+    cheese.rotation.x = Math.PI / 2;
+    m.add(cheese);
+    // A few pepperoni dots
+    for (let p = 0; p < 4; p++) {
+      const pep = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.16, 0.16, 0.05, 12),
+        moonPepMat,
+      );
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 0.55;
+      pep.position.set(Math.cos(a) * r, Math.sin(a) * r, 0.08);
+      pep.rotation.x = Math.PI / 2;
+      m.add(pep);
+    }
+    m.scale.setScalar(moonScale);
+    finalLayer.add(m);
+    pizzaMoons.push({
+      group: m,
+      angle: (i / 4) * Math.PI * 2,
+      radius: 3.4 + i * 0.9,
+      speed: 0.6 - i * 0.08,
+      tilt: (Math.random() - 0.5) * 0.6,
+    });
+  }
+
   // ---- Camera positions per phase ----
   const camTargets: Record<Phase, { pos: THREE.Vector3; look: THREE.Vector3 }> = {
     shop:       { pos: new THREE.Vector3(0, 2.8, 4.2),  look: new THREE.Vector3(0, 0.1, -1.0) },
@@ -2548,6 +2599,17 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       // axis so toppings parade past as it rotates.
       pizzaSun.rotation.z = elapsed * 0.2;
       sunGlow.intensity = 3 + Math.sin(elapsed * 2) * 0.6;
+      // Pizza moons orbit the sun + spin individually.
+      for (const m of pizzaMoons) {
+        m.angle += dt * m.speed;
+        const a = m.angle;
+        m.group.position.set(
+          Math.cos(a) * m.radius,
+          Math.sin(a) * m.radius * 0.4 + m.tilt,
+          Math.sin(a * 0.7) * 0.8,
+        );
+        m.group.rotation.z = -a * 1.5;
+      }
     }
 
     // ---- Phase fade tick ----
