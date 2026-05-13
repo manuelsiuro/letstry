@@ -2259,6 +2259,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     c.userData.phase = i * 0.7;
     c.userData.radius = 2.3;
     c.userData.tilt = (i % 2 === 0 ? 1 : -1) * 0.6;
+    // Vary scale per crystal so the cluster has different facet sizes.
+    c.scale.setScalar(0.65 + Math.random() * 0.7);
     timeloopLayer.add(c);
     crystals.push(c);
   }
