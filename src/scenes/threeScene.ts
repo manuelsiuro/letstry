@@ -1032,12 +1032,39 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   type Drone = THREE.Group & { userData: { angle: number; radius: number; speed: number; tilt: number } };
   const drones: Drone[] = [];
+
+  // Shared geos/materials for the drone payload box — created once, reused.
+  const droneBoxBodyGeo = new THREE.BoxGeometry(0.32, 0.07, 0.32);
+  const droneBoxLidGeo = new THREE.BoxGeometry(0.34, 0.02, 0.34);
+  const droneBoxBodyMat = new THREE.MeshStandardMaterial({
+    color: 0xe04848, emissive: 0x331111, emissiveIntensity: 0.3, roughness: 0.5,
+  });
+  const droneBoxLidMat = new THREE.MeshStandardMaterial({
+    color: 0xf5e6c8, roughness: 0.6,
+  });
+
   function spawnDrone(): void {
     const d = new THREE.Group() as Drone;
     onModelReady("drone", (clone) => {
       clone.scale.setScalar(0.65);
       d.add(clone);
     });
+    // Pizza-box payload, hanging below the drone with a small tether line.
+    const payload = new THREE.Group();
+    const body = new THREE.Mesh(droneBoxBodyGeo, droneBoxBodyMat);
+    payload.add(body);
+    const lid = new THREE.Mesh(droneBoxLidGeo, droneBoxLidMat);
+    lid.position.y = 0.045;
+    payload.add(lid);
+    // Tether: thin cylinder going up from the box top to the drone body.
+    const tether = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.01, 0.01, 0.25, 6),
+      new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.8 }),
+    );
+    tether.position.y = 0.18;
+    payload.add(tether);
+    payload.position.y = -0.4;
+    d.add(payload);
     d.userData.angle = Math.random() * Math.PI * 2;
     // Spread across two orbit shells so the swarm reads as a swarm,
     // not a single ring overlapping Earth.
