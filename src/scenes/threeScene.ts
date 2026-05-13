@@ -37,6 +37,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   let composer: EffectComposer | null = null;
   let bloomPass: UnrealBloomPass | null = null;
   let chromAberrPass: ShaderPass | null = null;
+  let scanlinePass: ShaderPass | null = null;
   if (FX_ON) {
     composer = new EffectComposer(renderer);
     composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -109,6 +110,35 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     });
     chromAberrPass.enabled = false;
     composer.addPass(chromAberrPass);
+    // Scanlines — final / credits phase only. Darkens every other row.
+    scanlinePass = new ShaderPass({
+      uniforms: {
+        tDiffuse: { value: null },
+        resolution: { value: new THREE.Vector2(mount.clientWidth, mount.clientHeight) },
+        intensity: { value: 0.22 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform vec2 resolution;
+        uniform float intensity;
+        varying vec2 vUv;
+        void main() {
+          vec4 color = texture2D(tDiffuse, vUv);
+          float line = sin(vUv.y * resolution.y * 1.8) * 0.5 + 0.5;
+          color.rgb *= (1.0 - intensity * line);
+          gl_FragColor = color;
+        }
+      `,
+    });
+    scanlinePass.enabled = false;
+    composer.addPass(scanlinePass);
     composer.addPass(new OutputPass());
   }
 
@@ -2240,6 +2270,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     renderer.setSize(w, h);
     composer?.setSize(w, h);
     bloomPass?.setSize(w, h);
+    if (scanlinePass) (scanlinePass.material.uniforms.resolution.value as THREE.Vector2).set(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   };
@@ -3070,6 +3101,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     }
 
     if (chromAberrPass) chromAberrPass.enabled = cosmicLayer.visible;
+    if (scanlinePass) scanlinePass.enabled = finalLayer.visible;
     if (composer) {
       composer.render();
     } else {
