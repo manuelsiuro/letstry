@@ -196,6 +196,56 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     shopLayer.add(puddle);
   }
 
+  // ---- Streetlights ----
+  // Two poles flanking the shop entrance, plus a third further out.
+  // Each gets a glowing head and a translucent additive cone underneath
+  // suggesting light spill — cheaper than an actual SpotLight + shadow.
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x2c3340, roughness: 0.7, metalness: 0.4 });
+  const lampHeadMat = new THREE.MeshStandardMaterial({
+    color: 0xfff4c8, emissive: 0xffd075, emissiveIntensity: 1.8, roughness: 0.4, fog: false,
+  });
+  const lampConeMat = new THREE.MeshBasicMaterial({
+    color: 0xfff0a8, transparent: true, opacity: 0.18,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+  });
+  const streetlightSpots: Array<[number, number]> = [
+    [-3.6, 1.6],
+    [3.6, 1.6],
+    [-5.4, 3.4],
+  ];
+  for (const [sx, sz] of streetlightSpots) {
+    const lamp = new THREE.Group();
+    const poleH = 3.2;
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.05, poleH, 8),
+      poleMat,
+    );
+    pole.position.y = poleH / 2;
+    lamp.add(pole);
+    // Short horizontal arm at the top — head hangs from it.
+    const armOff = 0.4 * (sx > 0 ? -1 : 1); // arm points toward shop
+    const arm = new THREE.Mesh(
+      new THREE.BoxGeometry(Math.abs(armOff), 0.06, 0.06),
+      poleMat,
+    );
+    arm.position.set(armOff / 2, poleH - 0.05, 0);
+    lamp.add(arm);
+    // Lamp head — small glowing box
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.22), lampHeadMat);
+    head.position.set(armOff, poleH - 0.18, 0);
+    lamp.add(head);
+    // Light cone shaft below the head — ConeGeometry default has tip at
+    // +Y and wide base at -Y, which is exactly what a streetlight wants.
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry(0.7, poleH - 0.4, 18, 1, true),
+      lampConeMat,
+    );
+    cone.position.set(armOff, (poleH - 0.4) / 2, 0);
+    lamp.add(cone);
+    lamp.position.set(sx, GROUND_Y, sz);
+    shopLayer.add(lamp);
+  }
+
   // ---- Nighttime city backdrop ----
   // Procedural row of building silhouettes with random lit windows on a
   // ring behind the shop. Reads as "you're a pizzeria on a city street"
