@@ -793,6 +793,23 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     awningBulbs.push({ mesh: b, phase: Math.random() * Math.PI * 2 });
   }
 
+  // Small hanging tassel fringe along the awning's scalloped front edge.
+  // Each tassel is a thin cylinder grouped under its own pivot so the
+  // animate tick can sway them with a slight phase offset.
+  type Tassel = { pivot: THREE.Group; phase: number };
+  const tassels: Tassel[] = [];
+  const tasselMat = new THREE.MeshStandardMaterial({ color: 0xe04848, roughness: 0.7 });
+  const tasselGeo = new THREE.CylinderGeometry(0.012, 0.005, 0.14, 6);
+  tasselGeo.translate(0, -0.07, 0);
+  for (let i = 0; i < 12; i++) {
+    const pivot = new THREE.Group();
+    pivot.position.set(-1.7 + i * 0.31, 1.02, 1.08);
+    const tassel = new THREE.Mesh(tasselGeo, tasselMat);
+    pivot.add(tassel);
+    shopLayer.add(pivot);
+    tassels.push({ pivot, phase: i * 0.45 });
+  }
+
   // Pizza disc on counter — placeholder until pizza.glb loads
   const pizza = new THREE.Group();
   pizza.position.set(0, counterTopY + 0.03, 0);
@@ -2800,6 +2817,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       for (const ab of awningBulbs) {
         const v = Math.sin(elapsed * 2.4 + ab.phase) * 0.4 + Math.sin(elapsed * 5.1 + ab.phase * 1.7) * 0.2;
         (ab.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.4 + v;
+      }
+      // Tassels sway with a phase offset so the fringe ripples in a breeze.
+      for (const t of tassels) {
+        t.pivot.rotation.z = Math.sin(elapsed * 1.8 + t.phase) * 0.18;
       }
     }
 
