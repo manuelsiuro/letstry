@@ -489,33 +489,38 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const elbow = new THREE.Mesh(armElbowGeo, botArmJointMat);
     elbow.position.y = elbowY;
     g.add(elbow);
-    // Forearm angled forward (~35deg) from the elbow; pivot-at-top
-    const angle = Math.PI / 5; // 36deg
+    // Forearm + wrist + pincers nested under an "elbow pivot" so the whole
+    // lower arm rotates together when we animate the elbow flex.
+    const elbowPivot = new THREE.Group();
+    elbowPivot.position.y = elbowY;
+    g.add(elbowPivot);
+    const angle = Math.PI / 5; // 36deg base flex
+    elbowPivot.rotation.x = angle;
+
+    // In elbowPivot's local frame the forearm hangs straight down from y=0.
     const forearm = new THREE.Mesh(armForearmGeo, botArmMat);
-    forearm.position.y = elbowY;
-    forearm.rotation.x = angle;
-    g.add(forearm);
-    // Wrist tip — small glowing sphere
-    const tipY = elbowY - Math.cos(angle) * 0.26;
-    const tipZ = Math.sin(angle) * 0.26;
+    elbowPivot.add(forearm);
+    const tipY = -0.26;
     const wrist = new THREE.Mesh(armWristGeo, botArmJointMat);
-    wrist.position.set(0, tipY, tipZ);
-    g.add(wrist);
-    // Wrist LED — small red dot indicator
+    wrist.position.set(0, tipY, 0);
+    elbowPivot.add(wrist);
     const led = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), botArmWristLEDMat);
-    led.position.set(0, tipY, tipZ + 0.04);
-    g.add(led);
-    // Pincer: two angled bars sprouting from the wrist
+    led.position.set(0, tipY, 0.04);
+    elbowPivot.add(led);
+    // Pincers sprout from the wrist; pincerPivots let them open/close.
     const pincerL = new THREE.Mesh(armPincerGeo, botArmMat);
-    pincerL.position.set(-0.04, tipY - 0.02, tipZ + 0.02);
-    pincerL.rotation.x = angle * 0.6;
+    pincerL.position.set(-0.04, tipY - 0.02, 0.02);
     pincerL.rotation.z = 0.2;
-    g.add(pincerL);
+    elbowPivot.add(pincerL);
     const pincerR = new THREE.Mesh(armPincerGeo, botArmMat);
-    pincerR.position.set(0.04, tipY - 0.02, tipZ + 0.02);
-    pincerR.rotation.x = angle * 0.6;
+    pincerR.position.set(0.04, tipY - 0.02, 0.02);
     pincerR.rotation.z = -0.2;
-    g.add(pincerR);
+    elbowPivot.add(pincerR);
+
+    g.userData.elbowPivot = elbowPivot;
+    g.userData.baseElbowAngle = angle;
+    g.userData.pincerL = pincerL;
+    g.userData.pincerR = pincerR;
     return g;
   }
   function disposeOvenProps(p: OvenProps): void {
@@ -967,10 +972,25 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         m.opacity = (1 - t) * 0.5;
       }
       if (p.arm.visible) {
-        // Bob slightly + sweep side-to-side as if working.
+        // Sway side-to-side + bob slightly + grab/release cycle.
         const baseY = (p.arm.userData.baseY ??= p.arm.position.y);
-        p.arm.position.y = baseY + Math.sin(elapsed * 4 + p.arm.position.x * 3) * 0.06;
-        p.arm.rotation.y = Math.sin(elapsed * 2.5 + p.arm.position.x) * 0.45;
+        const phase = p.arm.position.x * 3;
+        p.arm.position.y = baseY + Math.sin(elapsed * 4 + phase) * 0.06;
+        p.arm.rotation.y = Math.sin(elapsed * 2.5 + phase) * 0.45;
+        // Elbow flex: bend further forward then back to base angle.
+        const elbowPivot = p.arm.userData.elbowPivot as THREE.Group | undefined;
+        const baseAngle = p.arm.userData.baseElbowAngle as number;
+        if (elbowPivot) {
+          const flex = (Math.sin(elapsed * 3 + phase) + 1) * 0.35; // 0..0.7 rad
+          elbowPivot.rotation.x = baseAngle + flex;
+        }
+        // Pincer open/close — closes when elbow flexes deepest (grabbing).
+        const grip = (Math.cos(elapsed * 3 + phase) + 1) * 0.5; // 0=open, 1=closed
+        const open = 0.5 - grip * 0.4; // 0.5 open → 0.1 closed
+        const pL = p.arm.userData.pincerL as THREE.Mesh | undefined;
+        const pR = p.arm.userData.pincerR as THREE.Mesh | undefined;
+        if (pL) pL.rotation.z = open;
+        if (pR) pR.rotation.z = -open;
       }
     }
     // Marketing star fountain
