@@ -836,9 +836,18 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     g.add(head);
     const headMesh = new THREE.Mesh(custHeadGeo, matSkinC);
     head.add(headMesh);
-    const hat = new THREE.Mesh(custHatGeo, matHat);
-    hat.position.y = 0.13;
-    head.add(hat);
+    // Hat variety: 60% flat cap, 25% dome/bowler, 15% bareheaded.
+    const hatRoll = Math.random();
+    if (hatRoll < 0.6) {
+      const hat = new THREE.Mesh(custHatGeo, matHat);
+      hat.position.y = 0.13;
+      head.add(hat);
+    } else if (hatRoll < 0.85) {
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), matHat);
+      dome.position.y = 0.04;
+      head.add(dome);
+    }
+    // 15% — no hat at all, head shows bare.
     // Arms — shoulder pivot
     const armL = new THREE.Mesh(custArmGeo, matShirt);
     armL.position.set(-0.2, 0.95, 0);
@@ -874,6 +883,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       : new THREE.Vector3((Math.random() - 0.5) * 1.5, GROUND_Y, QUEUE_BASE_Z);
     const exitPos = new THREE.Vector3(-side * (6 + Math.random() * 2), GROUND_Y, 3.2 + Math.random() * 1);
     g.position.copy(spawnPos);
+    // Per-customer body scale variation — same height range as real people.
+    const bodyScale = 0.85 + Math.random() * 0.3;
+    g.scale.setScalar(bodyScale);
     localLayer.add(g);
     return {
       group: g,
