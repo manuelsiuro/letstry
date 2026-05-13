@@ -758,6 +758,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     pizzaBox: THREE.Group;
     state: CustomerState;
     stateTime: number;
+    queueSlot: number; // -1 = no slot held
     spawnPos: THREE.Vector3;
     queuePos: THREE.Vector3;
     exitPos: THREE.Vector3;
@@ -766,6 +767,29 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     headFacing: number;
     walkPhase: number;
   };
+
+  // Discrete queue slots in front of the counter — keeps customers lined up
+  // instead of overlapping at random x positions.
+  const QUEUE_SLOT_COUNT = 4;
+  const QUEUE_BASE_Z = 1.4;
+  const QUEUE_SLOT_STRIDE = 0.7;
+  const queueSlotTaken: boolean[] = new Array(QUEUE_SLOT_COUNT).fill(false);
+  function queueSlotPos(slot: number): THREE.Vector3 {
+    const x = (slot - (QUEUE_SLOT_COUNT - 1) / 2) * QUEUE_SLOT_STRIDE;
+    return new THREE.Vector3(x, GROUND_Y, QUEUE_BASE_Z);
+  }
+  function claimQueueSlot(): number {
+    for (let i = 0; i < queueSlotTaken.length; i++) {
+      if (!queueSlotTaken[i]) {
+        queueSlotTaken[i] = true;
+        return i;
+      }
+    }
+    return -1; // shouldn't happen unless desiredCustomers > slots
+  }
+  function releaseQueueSlot(slot: number): void {
+    if (slot >= 0 && slot < queueSlotTaken.length) queueSlotTaken[slot] = false;
+  }
   const customers: Customer[] = [];
   const CUSTOMER_SPEED = 1.4; // m/s
 
@@ -843,8 +867,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const spawnX = side * (5 + Math.random() * 2);
     const spawnZ = 2.5 + Math.random() * 1.5;
     const spawnPos = new THREE.Vector3(spawnX, GROUND_Y, spawnZ);
-    // Queue at counter front, slight horizontal spread
-    const queuePos = new THREE.Vector3((Math.random() - 0.5) * 1.5, GROUND_Y, 1.4);
+    // Queue: take the next free slot so customers form a tidy line.
+    const slot = claimQueueSlot();
+    const queuePos = slot >= 0
+      ? queueSlotPos(slot)
+      : new THREE.Vector3((Math.random() - 0.5) * 1.5, GROUND_Y, QUEUE_BASE_Z);
     const exitPos = new THREE.Vector3(-side * (6 + Math.random() * 2), GROUND_Y, 3.2 + Math.random() * 1);
     g.position.copy(spawnPos);
     localLayer.add(g);
@@ -854,6 +881,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       pizzaBox,
       state: "arriving",
       stateTime: 0,
+      queueSlot: slot,
       spawnPos,
       queuePos,
       exitPos,
@@ -1260,6 +1288,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     }
     while (customers.length > desiredCustomers) {
       const c = customers.pop()!;
+      releaseQueueSlot(c.queueSlot);
       localLayer.remove(c.group);
     }
 
@@ -1810,6 +1839,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             c.travelTime = Math.max(0.5, c.queuePos.distanceTo(c.exitPos) / CUSTOMER_SPEED);
             // Got their pizza — hand them the box.
             c.pizzaBox.visible = true;
+            // Free the queue slot so the next customer can take it.
+            releaseQueueSlot(c.queueSlot);
+            c.queueSlot = -1;
           }
           break;
         }
@@ -1825,9 +1857,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             c.group.position.copy(c.spawnPos);
             c.state = "arriving";
             c.stateTime = 0;
-            c.travelTime = Math.max(0.5, c.spawnPos.distanceTo(c.queuePos) / CUSTOMER_SPEED);
             // Hands empty again on the next visit.
             c.pizzaBox.visible = false;
+            // Reclaim a queue slot for this visit.
+            c.queueSlot = claimQueueSlot();
+            if (c.queueSlot >= 0) c.queuePos.copy(queueSlotPos(c.queueSlot));
+            c.travelTime = Math.max(0.5, c.spawnPos.distanceTo(c.queuePos) / CUSTOMER_SPEED);
           }
           break;
         }
