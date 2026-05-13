@@ -415,6 +415,62 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   sign.position.set(0, 2.2, 0.62);
   shopLayer.add(sign);
 
+  // Volumetric "god-rays" — two slanted additive translucent planes hanging
+  // down from the neon sign, picking out the air-light beam. Pulses softly
+  // with the neon glow timer.
+  const rayTex = (() => {
+    // Build a 1x256 vertical gradient (bright at top, fade to 0 at bottom)
+    const cv = document.createElement("canvas");
+    cv.width = 4; cv.height = 256;
+    const ctx = cv.getContext("2d")!;
+    const g = ctx.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, "rgba(255,90,150,0.55)");
+    g.addColorStop(0.5, "rgba(255,90,150,0.18)");
+    g.addColorStop(1, "rgba(255,90,150,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 4, 256);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const rayMat = new THREE.MeshBasicMaterial({
+    map: rayTex,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    opacity: 1,
+    fog: false,
+  });
+  const godRays: THREE.Mesh[] = [];
+  // Two crossed planes shaped wider at top → narrower at bottom (using
+  // ShapeGeometry trapezoid).
+  for (let i = 0; i < 2; i++) {
+    const trapezoid = new THREE.Shape();
+    const topHalf = 1.5;
+    const botHalf = 0.3;
+    const height = 2.4;
+    trapezoid.moveTo(-topHalf, height / 2);
+    trapezoid.lineTo(topHalf, height / 2);
+    trapezoid.lineTo(botHalf, -height / 2);
+    trapezoid.lineTo(-botHalf, -height / 2);
+    trapezoid.closePath();
+    const geo = new THREE.ShapeGeometry(trapezoid);
+    // UVs default to bbox; ensure top→bottom maps to the gradient.
+    const uv = geo.attributes.uv as THREE.BufferAttribute;
+    for (let v = 0; v < uv.count; v++) {
+      const y = geo.attributes.position.getY(v);
+      // Normalize y from [-height/2, +height/2] to [1, 0] (top of texture is 0)
+      uv.setXY(v, 0.5, 1 - (y + height / 2) / height);
+    }
+    const m = new THREE.Mesh(geo, rayMat.clone());
+    m.position.set(0, 1.05, 0.55);
+    m.rotation.y = i === 0 ? Math.PI / 8 : -Math.PI / 8;
+    m.renderOrder = 50;
+    shopLayer.add(m);
+    godRays.push(m);
+  }
+
   // Pizza disc on counter — placeholder until pizza.glb loads
   const pizza = new THREE.Group();
   pizza.position.set(0, counterTopY + 0.03, 0);
@@ -1821,7 +1877,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     }
 
     // Neon pulse
-    neonGlow.intensity = 1.2 + Math.sin(elapsed * 3) * 0.4;
+    const neonAmt = Math.sin(elapsed * 3) * 0.4;
+    neonGlow.intensity = 1.2 + neonAmt;
+    // God-rays follow the same pulse — keeps the beams synced to the sign.
+    if (shopLayer.visible) {
+      for (const r of godRays) {
+        (r.material as THREE.MeshBasicMaterial).opacity = 0.55 + neonAmt * 0.5;
+      }
+    }
     // Kitchen glow tied to flame intensity — dims out when ovens are off.
     const ovenLit = ovenProps.some((p) => p.flame.visible);
     kitchenGlow.intensity = ovenLit ? 1.6 + Math.sin(elapsed * 6) * 0.3 : 0.0;
