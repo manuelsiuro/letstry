@@ -1076,6 +1076,38 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   camera.position.copy(camPos);
   camera.lookAt(camLook);
 
+  // ---- Phase-transition fade overlay ----
+  // A black plane attached to the camera, just past the near plane, that
+  // fades in and out when phase groups change. Layer visibility swap is
+  // deferred to the peak of the fade so the cut happens behind black.
+  function phaseGroup(p: Phase): "shop" | "cosmic" | "final" {
+    if (p === "shop" || p === "local") return "shop";
+    if (p === "final" || p === "credits") return "final";
+    return "cosmic";
+  }
+  const fadeMat = new THREE.MeshBasicMaterial({
+    color: 0x000000, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false,
+  });
+  // Plane added to scene directly; per-frame we reposition it just in front
+  // of the camera. This avoids the "child of camera" rendering quirks with
+  // the post-processing composer.
+  const fadePlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), fadeMat);
+  fadePlane.renderOrder = 9999;
+  fadePlane.frustumCulled = false;
+  scene.add(fadePlane);
+
+  type FadeState = "idle" | "out" | "in";
+  let fadeState: FadeState = "idle";
+  let fadeTime = 0;
+  const FADE_DURATION = 0.55; // seconds per half
+  let pendingPhase: Phase | null = null;
+
+  function startPhaseFade(toPhase: Phase): void {
+    pendingPhase = toPhase;
+    fadeState = "out";
+    fadeTime = 0;
+  }
+
   let prevPhase: Phase = "shop";
   let prevBikeCount = 0;
   let prevDroneCount = 0;
@@ -1154,16 +1186,25 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       cosmicLayer.remove(d);
     }
 
-    // phase visibility
-    shopLayer.visible = s.phase === "shop" || s.phase === "local";
-    localLayer.visible = s.phase === "shop" || s.phase === "local";
-    cosmicLayer.visible = s.phase === "cosmic" || s.phase === "multiverse" || s.phase === "timeloop" || s.phase === "empire";
-    multiverseLayer.visible = s.phase === "multiverse";
-    timeloopLayer.visible = s.phase === "timeloop";
-    empireLayer.visible = s.phase === "empire";
-    finalLayer.visible = s.phase === "final" || s.phase === "credits";
+    // Phase visibility — but if we're mid-fade, hold off until the fade
+    // peak so the cut happens under cover of the black overlay.
+    const isCrossGroup =
+      s.phase !== prevPhase && phaseGroup(s.phase) !== phaseGroup(prevPhase);
+    if (isCrossGroup && fadeState === "idle") {
+      // Defer the swap — kick off a fade. The "in" half of the fade applies
+      // the new layer visibility.
+      startPhaseFade(s.phase);
+    } else if (!isCrossGroup || fadeState === "in") {
+      shopLayer.visible = s.phase === "shop" || s.phase === "local";
+      localLayer.visible = s.phase === "shop" || s.phase === "local";
+      cosmicLayer.visible = s.phase === "cosmic" || s.phase === "multiverse" || s.phase === "timeloop" || s.phase === "empire";
+      multiverseLayer.visible = s.phase === "multiverse";
+      timeloopLayer.visible = s.phase === "timeloop";
+      empireLayer.visible = s.phase === "empire";
+      finalLayer.visible = s.phase === "final" || s.phase === "credits";
+    }
 
-    if (s.phase !== prevPhase) {
+    if (s.phase !== prevPhase && fadeState === "idle") {
       prevPhase = s.phase;
     }
 
@@ -1751,6 +1792,55 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       // axis so toppings parade past as it rotates.
       pizzaSun.rotation.z = elapsed * 0.2;
       sunGlow.intensity = 3 + Math.sin(elapsed * 2) * 0.6;
+    }
+
+    // ---- Phase fade tick ----
+    // Park the fade plane just in front of the camera, billboarded to its
+    // facing, sized to cover the frustum at that distance regardless of FOV.
+    {
+      const d = 0.2;
+      // Camera forward direction
+      const fwd = new THREE.Vector3();
+      camera.getWorldDirection(fwd);
+      fadePlane.position.copy(camera.position).addScaledVector(fwd, d);
+      fadePlane.quaternion.copy(camera.quaternion);
+      // Cover the frustum at distance d, with margin.
+      const halfH = d * Math.tan((camera.fov * Math.PI) / 360);
+      const halfW = halfH * camera.aspect;
+      fadePlane.scale.set(halfW * 2.4, halfH * 2.4, 1);
+    }
+    if (fadeState !== "idle") {
+      fadeTime += dt;
+      const k = Math.min(1, fadeTime / FADE_DURATION);
+      if (fadeState === "out") {
+        fadeMat.opacity = k;
+        if (k >= 1 && pendingPhase) {
+          // At peak — swap layer visibility under cover of black.
+          const p = pendingPhase;
+          shopLayer.visible = p === "shop" || p === "local";
+          localLayer.visible = p === "shop" || p === "local";
+          cosmicLayer.visible = p === "cosmic" || p === "multiverse" || p === "timeloop" || p === "empire";
+          multiverseLayer.visible = p === "multiverse";
+          timeloopLayer.visible = p === "timeloop";
+          empireLayer.visible = p === "empire";
+          finalLayer.visible = p === "final" || p === "credits";
+          prevPhase = p;
+          pendingPhase = null;
+          fadeState = "in";
+          fadeTime = 0;
+          // Snap camera to the new target so the reveal starts there
+          const newTarget = camTargets[p];
+          camPos.copy(newTarget.pos);
+          camLook.copy(newTarget.look);
+        }
+      } else {
+        // "in" — opacity 1 → 0
+        fadeMat.opacity = 1 - k;
+        if (k >= 1) {
+          fadeMat.opacity = 0;
+          fadeState = "idle";
+        }
+      }
     }
 
     if (composer) {
