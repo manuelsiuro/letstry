@@ -1541,6 +1541,43 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   );
   earth.add(earthHalo);
 
+  // ---- City lights ----
+  // A points cloud distributed on Earth's surface, clustered toward equator
+  // bands so it reads as continents rather than a uniform haze. Twinkles
+  // via material.opacity sin.
+  const cityCount = 280;
+  const cityPositions = new Float32Array(cityCount * 3);
+  for (let i = 0; i < cityCount; i++) {
+    // Concentrate around mid latitudes (cluster around y=0) — squared random
+    // gives more samples near equator.
+    let lat: number;
+    do {
+      lat = (Math.random() - 0.5) * Math.PI; // -π/2..π/2
+    } while (Math.abs(Math.sin(lat)) > 0.85); // skip polar dead-zones
+    const lon = Math.random() * Math.PI * 2;
+    const r = 1.42; // just above Earth radius (1.4)
+    const x = r * Math.cos(lat) * Math.cos(lon);
+    const y = r * Math.sin(lat);
+    const z = r * Math.cos(lat) * Math.sin(lon);
+    cityPositions[i * 3 + 0] = x;
+    cityPositions[i * 3 + 1] = y;
+    cityPositions[i * 3 + 2] = z;
+  }
+  const cityGeo = new THREE.BufferGeometry();
+  cityGeo.setAttribute("position", new THREE.BufferAttribute(cityPositions, 3));
+  const cityMat = new THREE.PointsMaterial({
+    color: 0xffe6a0,
+    size: 0.04,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.85,
+    fog: false,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const cityLights = new THREE.Points(cityGeo, cityMat);
+  earth.add(cityLights);
+
   const planets: THREE.Mesh[] = [];
   function makePlanet(color: number, radius: number, distance: number, speed: number): THREE.Mesh {
     const p = new THREE.Mesh(
@@ -3000,6 +3037,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // Cosmic
     if (cosmicLayer.visible) {
       earth.rotation.y = elapsed * 0.15;
+      // City lights breathe — soft global twinkle.
+      cityMat.opacity = 0.75 + Math.sin(elapsed * 1.4) * 0.15;
       stars.rotation.y = elapsed * 0.005;
       wormhole.rotation.z = elapsed * 0.6;
       // Warp rings spin on independent axes — the portal feels "active".
