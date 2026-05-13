@@ -767,6 +767,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   awning.rotation.x = -Math.PI / 2 + 0.35;
   awning.position.set(0, 1.45, 0.7);
   shopLayer.add(awning);
+  // Soft red bounce light from the awning canopy onto the counter top.
+  // PointLight under the awning, short range so it doesn't pollute the
+  // rest of the scene.
+  const awningBleed = new THREE.PointLight(0xff5d5d, 1.4, 3.0, 2.0);
+  awningBleed.position.set(0, 1.1, 0.4);
+  shopLayer.add(awningBleed);
   // Tiny bulb-string below the awning front edge. Each bulb has its own
   // cloned material + phase so the row twinkles.
   type AwningBulb = { mesh: THREE.Mesh; phase: number };
