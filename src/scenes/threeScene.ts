@@ -2012,9 +2012,31 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
   }
   starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+  // Per-star color variation — most are warm-white, some blue / red giants.
+  const starColors = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount; i++) {
+    const tint = Math.random();
+    if (tint < 0.7) {
+      // warm white
+      starColors[i * 3 + 0] = 1.0;
+      starColors[i * 3 + 1] = 0.95;
+      starColors[i * 3 + 2] = 0.85;
+    } else if (tint < 0.88) {
+      // blue giant
+      starColors[i * 3 + 0] = 0.7;
+      starColors[i * 3 + 1] = 0.85;
+      starColors[i * 3 + 2] = 1.0;
+    } else {
+      // red giant
+      starColors[i * 3 + 0] = 1.0;
+      starColors[i * 3 + 1] = 0.7;
+      starColors[i * 3 + 2] = 0.55;
+    }
+  }
+  starGeo.setAttribute("color", new THREE.BufferAttribute(starColors, 3));
   const stars = new THREE.Points(
     starGeo,
-    new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, sizeAttenuation: true, transparent: true, opacity: 0.9 }),
+    new THREE.PointsMaterial({ size: 0.6, sizeAttenuation: true, transparent: true, opacity: 0.9, vertexColors: true }),
   );
   cosmicLayer.add(stars);
 
