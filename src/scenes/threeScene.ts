@@ -1980,7 +1980,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   earth.add(cityLights);
 
   const planets: THREE.Mesh[] = [];
-  function makePlanet(color: number, radius: number, distance: number, speed: number): THREE.Mesh {
+  function makePlanet(color: number, radius: number, distance: number, speed: number, inclination = 0.2): THREE.Mesh {
     const p = new THREE.Mesh(
       new THREE.SphereGeometry(radius, 20, 16),
       new THREE.MeshStandardMaterial({ color, roughness: 0.6, emissive: color, emissiveIntensity: 0.15 }),
@@ -1988,13 +1988,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     p.userData.distance = distance;
     p.userData.speed = speed;
     p.userData.angle = Math.random() * Math.PI * 2;
+    p.userData.inclination = inclination;
     cosmicLayer.add(p);
     planets.push(p);
     return p;
   }
-  makePlanet(0xd95a3a, 0.5, 4.2, 0.25); // Mars
-  makePlanet(0xe5c16f, 0.7, 6.0, 0.18); // Venus-ish
-  makePlanet(0xa37bdc, 0.9, 8.5, 0.12); // Jupiter
+  makePlanet(0xd95a3a, 0.5, 4.2, 0.25, 0.35); // Mars     — steep tilt
+  makePlanet(0xe5c16f, 0.7, 6.0, 0.18, 0.10); // Venus    — flat orbit
+  makePlanet(0xa37bdc, 0.9, 8.5, 0.12, 0.55); // Jupiter  — steepest, outermost
 
   // starfield
   const starGeo = new THREE.BufferGeometry();
@@ -3826,7 +3827,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         p.userData.angle += dt * p.userData.speed;
         const a = p.userData.angle;
         const dist = p.userData.distance;
-        p.position.set(Math.cos(a) * dist, Math.sin(a * 0.4) * 0.4, Math.sin(a) * dist);
+        const inc = (p.userData.inclination as number | undefined) ?? 0.2;
+        p.position.set(Math.cos(a) * dist, Math.sin(a) * dist * inc, Math.sin(a) * dist * Math.cos(inc));
         p.rotation.y += dt * 0.4;
       }
       for (const d of drones) {
