@@ -1085,7 +1085,42 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   chefs.push(makeChef(0, 0));
 
   // Back wall + shelves — wall reaches the floor so no gap shows.
-  const backWall = new THREE.Mesh(new THREE.BoxGeometry(5.4, 3.0, 0.1), matCream);
+  // Procedural brick texture: alternating-row offset, mortar gaps, slight
+  // color variation per brick.
+  const brickTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 512; cv.height = 256;
+    const ctx = cv.getContext("2d")!;
+    // Mortar background
+    ctx.fillStyle = "#4a3a2e";
+    ctx.fillRect(0, 0, 512, 256);
+    const brickW = 80;
+    const brickH = 32;
+    for (let row = 0; row < 8; row++) {
+      const offset = (row % 2) * (brickW / 2);
+      for (let col = -1; col < 7; col++) {
+        const x = col * brickW + offset + 2;
+        const y = row * brickH + 2;
+        // Slight color variation
+        const r = 180 + Math.floor(Math.random() * 40);
+        const g = 60 + Math.floor(Math.random() * 30);
+        const b = 50 + Math.floor(Math.random() * 30);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(x, y, brickW - 4, brickH - 4);
+      }
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(2, 1);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const brickMat = new THREE.MeshStandardMaterial({
+    map: brickTex,
+    roughness: 0.85,
+  });
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(5.4, 3.0, 0.1), brickMat);
   backWall.position.set(0, 1.0, -2.1);
   shopLayer.add(backWall);
 
