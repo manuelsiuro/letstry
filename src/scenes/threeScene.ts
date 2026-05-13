@@ -2231,12 +2231,20 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   empireLayer.add(flagship);
   // Fleet: extra drone squad in a V formation behind the flagship.
   const fleet: THREE.Group[] = [];
+  const fleetTaillightGeo = new THREE.SphereGeometry(0.05, 8, 6);
+  const fleetTaillightMat = new THREE.MeshBasicMaterial({
+    color: 0xff3344, transparent: true, opacity: 0.95, fog: false,
+  });
   for (let i = 0; i < 9; i++) {
     const f = new THREE.Group();
     onModelReady("drone", (clone) => {
       clone.scale.setScalar(0.7);
       f.add(clone);
     });
+    // Small red taillight behind each fleet drone — empire fleet now glows.
+    const taillight = new THREE.Mesh(fleetTaillightGeo, fleetTaillightMat);
+    taillight.position.set(0.35, 0, 0);
+    f.add(taillight);
     // V formation: offset along x and z based on index.
     const row = Math.floor(i / 2) + 1;
     const side = i % 2 === 0 ? 1 : -1;
