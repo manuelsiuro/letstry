@@ -3012,9 +3012,13 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       doughBall.rotation.y = elapsed * 1.5;
       doughBall.position.y = doughBaseY + Math.sin(elapsed * 2) * 0.06;
     }
-    // Cheese wheel: slow spin
+    // Cheese wheel: slow spin + slight bob on its shelf.
     if (cheeseWheel.visible) {
       cheeseWheel.rotation.y = elapsed * 0.5;
+      // Recall the original placement y so the bob is relative to it.
+      const cheeseBaseY = (cheeseWheel.userData.baseY as number | undefined) ?? cheeseWheel.position.y;
+      cheeseWheel.userData.baseY = cheeseBaseY;
+      cheeseWheel.position.y = cheeseBaseY + Math.sin(elapsed * 1.6) * 0.012;
     }
     // Oven flame + smoke (visibility already set by applyState)
     for (const p of ovenProps) {
