@@ -2516,6 +2516,13 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     camera.position.copy(camPos);
     camera.position.x += Math.sin(elapsed * 0.4) * drift;
     camera.position.y += Math.cos(elapsed * 0.3) * drift * 0.5;
+    // Final phase: zoom-in/out breathing. Move the camera toward / away
+    // from camLook on a slow sine, so the pizza-sun feels alive.
+    if (currentPhase === "final") {
+      const dir = new THREE.Vector3().subVectors(camLook, camera.position).normalize();
+      const k = Math.sin(elapsed * 0.5) * 0.6; // ±0.6m breath
+      camera.position.addScaledVector(dir, k);
+    }
     // Decaying make-shake — kicks the camera with high-frequency noise then
     // decays linearly over SHAKE_DURATION.
     if (shakeTime > 0) {
