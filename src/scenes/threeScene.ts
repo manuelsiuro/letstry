@@ -190,6 +190,22 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // doesn't feel like a static painting.
   type BlinkWindow = { mesh: THREE.Mesh; phase: number; period: number; threshold: number };
   const blinkWindows: BlinkWindow[] = [];
+
+  // Track rotating rooftop signs so the tick can spin them.
+  type RoofSign = { mesh: THREE.Mesh; speed: number };
+  const roofSigns: RoofSign[] = [];
+
+  const signPalette = [0xff3b88, 0x4cc9f0, 0xffd24a, 0xff7733, 0xb47dff];
+  function makeRoofSign(width: number): THREE.Mesh {
+    const color = signPalette[Math.floor(Math.random() * signPalette.length)];
+    const signWidth = Math.min(width * 0.7, 1.6);
+    const mat = new THREE.MeshStandardMaterial({
+      color, emissive: color, emissiveIntensity: 1.6,
+      roughness: 0.4, fog: false,
+    });
+    const geo = new THREE.BoxGeometry(signWidth, 0.25, 0.08);
+    return new THREE.Mesh(geo, mat);
+  }
   const buildingCount = 22;
   const ringRadius = 13;
   for (let i = 0; i < buildingCount; i++) {
@@ -242,13 +258,30 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       }
     }
     // Optional rooftop "antenna" or sign for variety
-    if (Math.random() < 0.3) {
+    if (Math.random() < 0.25) {
       const antenna = new THREE.Mesh(
         new THREE.CylinderGeometry(0.04, 0.04, 1.2, 6),
         buildingMat,
       );
       antenna.position.set(0, height / 2 + 0.6, 0);
       b.add(antenna);
+    } else if (Math.random() < 0.45) {
+      // Rotating rooftop billboard sign — added as a CHILD OF cityLayer
+      // (not the building) so its rotation animation is in world space and
+      // doesn't fight the building's own rotation.
+      const sign = makeRoofSign(width);
+      // Position above the building's roof in world space
+      const worldY = GROUND_Y + height + 0.35;
+      sign.position.set(b.position.x, worldY, b.position.z);
+      cityLayer.add(sign);
+      roofSigns.push({ mesh: sign, speed: 0.4 + Math.random() * 0.7 });
+      // A short post under it so it doesn't appear to float
+      const post = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, 0.4, 6),
+        buildingMat,
+      );
+      post.position.set(0, height / 2 + 0.2, 0);
+      b.add(post);
     }
   }
 
@@ -1537,13 +1570,16 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       p.sprite.scale.setScalar(base * growth);
     }
 
-    // City window flicker — only when the shop layer is actually visible.
+    // City window flicker + rooftop sign spin — only when shop is visible.
     if (shopLayer.visible) {
       for (const bw of blinkWindows) {
         const v = Math.sin(elapsed * (Math.PI * 2 / bw.period) + bw.phase);
         const on = v > -bw.threshold; // "off" only when sine dips below
         const mat = bw.mesh.material as THREE.MeshStandardMaterial;
         mat.emissiveIntensity = on ? 1.6 : 0.05;
+      }
+      for (const rs of roofSigns) {
+        rs.mesh.rotation.y += dt * rs.speed;
       }
     }
 
