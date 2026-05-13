@@ -977,6 +977,44 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   backWall.position.set(0, 1.0, -2.1);
   shopLayer.add(backWall);
 
+  // Wall clock — round face on the back wall with hour + minute hands.
+  const clockFaceMat = new THREE.MeshStandardMaterial({
+    color: 0xf5e6c8, emissive: 0x111111, emissiveIntensity: 0.2, roughness: 0.6,
+  });
+  const clockFace = new THREE.Mesh(
+    new THREE.CircleGeometry(0.22, 28),
+    clockFaceMat,
+  );
+  clockFace.position.set(-2.0, 2.05, -2.04); // slightly in front of back wall
+  shopLayer.add(clockFace);
+  const clockRimMat = new THREE.MeshStandardMaterial({ color: 0x33363f, roughness: 0.5 });
+  const clockRim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.22, 0.02, 8, 28),
+    clockRimMat,
+  );
+  clockRim.position.set(-2.0, 2.05, -2.03);
+  shopLayer.add(clockRim);
+  // Minute and hour hands — long thin boxes, pivoted at one end so they
+  // rotate around the clock center.
+  const handMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+  const minuteGeo = new THREE.BoxGeometry(0.015, 0.18, 0.01);
+  minuteGeo.translate(0, 0.08, 0); // pivot at base
+  const hourGeo = new THREE.BoxGeometry(0.022, 0.12, 0.01);
+  hourGeo.translate(0, 0.05, 0);
+  const minuteHand = new THREE.Mesh(minuteGeo, handMat);
+  minuteHand.position.set(-2.0, 2.05, -2.02);
+  shopLayer.add(minuteHand);
+  const hourHand = new THREE.Mesh(hourGeo, handMat);
+  hourHand.position.set(-2.0, 2.05, -2.02);
+  shopLayer.add(hourHand);
+  // Center stud
+  const clockStud = new THREE.Mesh(
+    new THREE.SphereGeometry(0.018, 10, 8),
+    new THREE.MeshStandardMaterial({ color: 0xff3b88, emissive: 0xff3b88, emissiveIntensity: 0.8 }),
+  );
+  clockStud.position.set(-2.0, 2.05, -2.01);
+  shopLayer.add(clockStud);
+
   const shelfGeo = new THREE.BoxGeometry(3.4, 0.05, 0.25);
   const shelfTop = new THREE.Mesh(shelfGeo, matWood);
   shelfTop.position.set(0, 1.55, -1.95);
@@ -2838,6 +2876,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // OPEN sign — gentle pendulum sway while shop is visible.
     if (shopLayer.visible) {
       openSignPivot.rotation.z = Math.sin(elapsed * 1.2) * 0.12;
+      // Wall clock — accelerated time: minute hand completes a revolution
+      // every 6s, hour hand 12× slower (= every 72s).
+      minuteHand.rotation.z = -elapsed * (Math.PI * 2 / 6);
+      hourHand.rotation.z = -elapsed * (Math.PI * 2 / 72);
       // Awning bulbs — each twinkles with its own phase.
       for (const ab of awningBulbs) {
         const v = Math.sin(elapsed * 2.4 + ab.phase) * 0.4 + Math.sin(elapsed * 5.1 + ab.phase * 1.7) * 0.2;
