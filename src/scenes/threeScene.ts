@@ -3743,6 +3743,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       pizzaSun.rotation.z = elapsed * 0.2;
       // Ω stamp gently lifts above and settles back onto the cheese.
       omegaStamp.position.z = 0.18 + Math.sin(elapsed * 0.9) * 0.06;
+      // Counter-rotate the stamp so the Ω stays upright while the pizza-
+      // sun spins underneath it.
+      omegaStamp.rotation.z = -pizzaSun.rotation.z;
       // Glow ramps 3 → 6 over 30s in-phase, then holds. The longer the
       // player lingers in the final moment, the more intense the sun.
       const heldFor = elapsed - finalEnteredAt;
