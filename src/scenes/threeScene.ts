@@ -599,6 +599,102 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   }
 
+  // ---- Customer NPCs ----
+  // Walk up to the shop, wait at the counter, walk away. Gives the local
+  // phase a sense of activity beyond just delivery bikes.
+  type CustomerState = "arriving" | "waiting" | "leaving";
+  type Customer = {
+    group: THREE.Group;
+    legL: THREE.Mesh;
+    legR: THREE.Mesh;
+    armL: THREE.Mesh;
+    armR: THREE.Mesh;
+    state: CustomerState;
+    stateTime: number;
+    spawnPos: THREE.Vector3;
+    queuePos: THREE.Vector3;
+    exitPos: THREE.Vector3;
+    travelTime: number;
+    facing: number;
+    walkPhase: number;
+  };
+  const customers: Customer[] = [];
+  const CUSTOMER_SPEED = 1.4; // m/s
+
+  // Shared geos for customers — similar shapes to chef but different
+  // proportions so they don't look identical.
+  const custBodyGeo = new THREE.BoxGeometry(0.32, 0.5, 0.22);
+  custBodyGeo.translate(0, 0.25, 0);
+  const custHeadGeo = new THREE.SphereGeometry(0.13, 12, 8);
+  const custLegGeo = new THREE.BoxGeometry(0.11, 0.45, 0.11);
+  custLegGeo.translate(0, -0.225, 0); // pivot at hip
+  const custArmGeo = new THREE.BoxGeometry(0.08, 0.32, 0.08);
+  custArmGeo.translate(0, -0.16, 0); // pivot at shoulder
+  const custHatGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.04, 10);
+
+  const customerPalettes = [
+    { shirt: 0x4cc9f0, pants: 0x2a3a55, skin: 0xd8a07a, hat: 0xe04848 },
+    { shirt: 0x9b59b6, pants: 0x3a3a3a, skin: 0xc18e6a, hat: 0xf2c466 },
+    { shirt: 0xe67e22, pants: 0x202830, skin: 0xe8b89a, hat: 0x2a3a55 },
+    { shirt: 0x27ae60, pants: 0x462810, skin: 0xc78f70, hat: 0x9be7ff },
+  ];
+
+  function makeCustomer(): Customer {
+    const palette = customerPalettes[Math.floor(Math.random() * customerPalettes.length)];
+    const g = new THREE.Group();
+    const matShirt = new THREE.MeshStandardMaterial({ color: palette.shirt, roughness: 0.7 });
+    const matPants = new THREE.MeshStandardMaterial({ color: palette.pants, roughness: 0.8 });
+    const matSkinC = new THREE.MeshStandardMaterial({ color: palette.skin, roughness: 0.7 });
+    const matHat = new THREE.MeshStandardMaterial({ color: palette.hat, roughness: 0.6 });
+    // Legs (hip pivot at y=0.5)
+    const legL = new THREE.Mesh(custLegGeo, matPants);
+    legL.position.set(-0.08, 0.5, 0);
+    g.add(legL);
+    const legR = new THREE.Mesh(custLegGeo, matPants);
+    legR.position.set(0.08, 0.5, 0);
+    g.add(legR);
+    // Torso: 0.5..1.0
+    const body = new THREE.Mesh(custBodyGeo, matShirt);
+    body.position.y = 0.5;
+    g.add(body);
+    // Head + hat
+    const head = new THREE.Mesh(custHeadGeo, matSkinC);
+    head.position.y = 1.15;
+    g.add(head);
+    const hat = new THREE.Mesh(custHatGeo, matHat);
+    hat.position.y = 1.28;
+    g.add(hat);
+    // Arms — shoulder pivot
+    const armL = new THREE.Mesh(custArmGeo, matShirt);
+    armL.position.set(-0.2, 0.95, 0);
+    g.add(armL);
+    const armR = new THREE.Mesh(custArmGeo, matShirt);
+    armR.position.set(0.2, 0.95, 0);
+    g.add(armR);
+    // Spawn from a random edge of the local play area
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const spawnX = side * (5 + Math.random() * 2);
+    const spawnZ = 2.5 + Math.random() * 1.5;
+    const spawnPos = new THREE.Vector3(spawnX, GROUND_Y, spawnZ);
+    // Queue at counter front, slight horizontal spread
+    const queuePos = new THREE.Vector3((Math.random() - 0.5) * 1.5, GROUND_Y, 1.4);
+    const exitPos = new THREE.Vector3(-side * (6 + Math.random() * 2), GROUND_Y, 3.2 + Math.random() * 1);
+    g.position.copy(spawnPos);
+    localLayer.add(g);
+    return {
+      group: g,
+      legL, legR, armL, armR,
+      state: "arriving",
+      stateTime: 0,
+      spawnPos,
+      queuePos,
+      exitPos,
+      travelTime: spawnPos.distanceTo(queuePos) / CUSTOMER_SPEED,
+      facing: 0,
+      walkPhase: Math.random() * Math.PI * 2,
+    };
+  }
+
   // ---- Cosmic layer (Earth + planets + drones) ----
   const cosmicLayer = new THREE.Group();
   cosmicLayer.visible = false;
@@ -909,6 +1005,17 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     while (bikes.length > desiredBikes) {
       const b = bikes.pop()!;
       localLayer.remove(b.group);
+    }
+
+    // Customers walk in once reputation is decent — they're the implied
+    // demand driver behind the bike-deliveries.
+    const desiredCustomers = s.reputation > 5 ? 3 : s.reputation > 1 ? 2 : 0;
+    while (customers.length < desiredCustomers) {
+      customers.push(makeCustomer());
+    }
+    while (customers.length > desiredCustomers) {
+      const c = customers.pop()!;
+      localLayer.remove(c.group);
     }
 
     // second chef if kitchen upgrade
@@ -1350,6 +1457,89 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       const lean = THREE.MathUtils.clamp((moving ? (b.facing - (b.group.userData.prevFacing ?? b.facing)) / Math.max(dt, 1e-3) : 0) * 0.15, -0.35, 0.35);
       b.group.rotation.z = -lean;
       b.group.userData.prevFacing = b.facing;
+    }
+
+    // Customers: arriving → waiting → leaving cycle
+    for (const c of customers) {
+      c.stateTime += dt;
+      const prev = c.group.position.clone();
+
+      switch (c.state) {
+        case "arriving": {
+          const k = Math.min(1, c.stateTime / c.travelTime);
+          const e = easeInOut(k);
+          c.group.position.lerpVectors(c.spawnPos, c.queuePos, e);
+          if (k >= 1) {
+            c.state = "waiting";
+            c.stateTime = 0;
+          }
+          break;
+        }
+        case "waiting": {
+          if (c.stateTime > 1.5) {
+            // Pick a new exit + restart
+            const side = Math.sign(c.group.position.x - 0) || (Math.random() < 0.5 ? -1 : 1);
+            c.exitPos.set(side * (6 + Math.random() * 2), GROUND_Y, 3.2 + Math.random() * 1);
+            c.state = "leaving";
+            c.stateTime = 0;
+            c.travelTime = Math.max(0.5, c.queuePos.distanceTo(c.exitPos) / CUSTOMER_SPEED);
+          }
+          break;
+        }
+        case "leaving": {
+          const k = Math.min(1, c.stateTime / c.travelTime);
+          const e = easeInOut(k);
+          c.group.position.lerpVectors(c.queuePos, c.exitPos, e);
+          if (k >= 1) {
+            // Respawn from a fresh edge position
+            const side = Math.random() < 0.5 ? -1 : 1;
+            c.spawnPos.set(side * (5 + Math.random() * 2), GROUND_Y, 2.5 + Math.random() * 1.5);
+            c.queuePos.set((Math.random() - 0.5) * 1.5, GROUND_Y, 1.4);
+            c.group.position.copy(c.spawnPos);
+            c.state = "arriving";
+            c.stateTime = 0;
+            c.travelTime = Math.max(0.5, c.spawnPos.distanceTo(c.queuePos) / CUSTOMER_SPEED);
+          }
+          break;
+        }
+      }
+
+      // Face direction of travel
+      const vx = c.group.position.x - prev.x;
+      const vz = c.group.position.z - prev.z;
+      const moving = vx * vx + vz * vz > 1e-6;
+      if (moving) {
+        const target = Math.atan2(vx, vz);
+        let diff = target - c.facing;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        c.facing += diff * Math.min(1, dt * 8);
+      } else {
+        // Face the counter while waiting
+        const tFace = Math.atan2(-c.group.position.x, -1.4 - c.group.position.z);
+        let diff = tFace - c.facing;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        c.facing += diff * Math.min(1, dt * 4);
+      }
+      c.group.rotation.y = c.facing;
+      // Walking cycle — legs swing opposite, arms swing opposite to legs
+      if (moving) {
+        c.walkPhase += dt * 7;
+        const swing = Math.sin(c.walkPhase);
+        c.legL.rotation.x = swing * 0.7;
+        c.legR.rotation.x = -swing * 0.7;
+        c.armL.rotation.x = -swing * 0.5;
+        c.armR.rotation.x = swing * 0.5;
+        // Slight bob
+        c.group.position.y = GROUND_Y + Math.abs(swing) * 0.04;
+      } else {
+        // Idle — legs straight, arms slightly forward (peering at counter)
+        c.legL.rotation.x *= 0.85;
+        c.legR.rotation.x *= 0.85;
+        c.armL.rotation.x = -0.2;
+        c.armR.rotation.x = -0.2;
+      }
     }
 
     // Cosmic
