@@ -1246,17 +1246,65 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   let elapsed = 0;
   const tmpLook = new THREE.Vector3();
 
+  // ---- Cinematic intro pan ----
+  // Sweep from a wide hero shot down to the shop view over ~3 seconds. The
+  // intro starts when main.ts dispatches "game-start" (after the menu closes)
+  // so the player actually sees it, not while the PLAY button still hides
+  // the canvas. Skipped for returning players (totalEarned > 0).
+  const INTRO_DURATION = 3.2;
+  let introTime = INTRO_DURATION; // start "done" — woken by game-start event
+  let introPending = false;
+  const introStartPos = new THREE.Vector3(-6, 5.5, 8.5);
+  const introStartLook = new THREE.Vector3(0, 1.2, -0.5);
+  const isReturningPlayer = (() => {
+    try {
+      const s = (window as { __game?: { getState?: () => { totalEarned?: number } } }).__game?.getState?.();
+      return !!(s && (s.totalEarned ?? 0) > 0);
+    } catch { return false; }
+  })();
+  if (!isReturningPlayer) {
+    introPending = true;
+    camPos.copy(introStartPos);
+    camLook.copy(introStartLook);
+    camera.position.copy(camPos);
+    camera.lookAt(camLook);
+  }
+  window.addEventListener("game-start", () => {
+    if (introPending) {
+      introTime = 0;
+      introPending = false;
+    }
+  }, { once: true });
+
+  function cubicInOut(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
   renderer.setAnimationLoop(() => {
     const dt = clock.getDelta();
     elapsed += dt;
     advance(dt);
 
-    // camera ease to current phase
     const target = camTargets[currentPhase];
-    camPos.lerp(target.pos, Math.min(1, dt * 1.2));
-    camLook.lerp(target.look, Math.min(1, dt * 1.2));
-    // gentle drift
-    const drift = currentPhase === "credits" ? 0.0 : 0.05;
+
+    if (introPending) {
+      // Hold at hero frame until game-start fires.
+      camPos.copy(introStartPos);
+      camLook.copy(introStartLook);
+    } else if (introTime < INTRO_DURATION) {
+      introTime += dt;
+      const k = Math.min(1, introTime / INTRO_DURATION);
+      const e = cubicInOut(k);
+      camPos.lerpVectors(introStartPos, target.pos, e);
+      camLook.lerpVectors(introStartLook, target.look, e);
+    } else {
+      // camera ease to current phase
+      camPos.lerp(target.pos, Math.min(1, dt * 1.2));
+      camLook.lerp(target.look, Math.min(1, dt * 1.2));
+    }
+    // gentle drift — disabled during the intro so the sweep stays clean
+    const intro = introPending || introTime < INTRO_DURATION;
+    const drift = currentPhase === "credits" || intro ? 0.0 : 0.05;
     camera.position.copy(camPos);
     camera.position.x += Math.sin(elapsed * 0.4) * drift;
     camera.position.y += Math.cos(elapsed * 0.3) * drift * 0.5;
