@@ -1011,6 +1011,23 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const hullEye = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), hullEmissiveMat);
   hullEye.position.set(1.3, 0.1, 0);
   flagship.add(hullEye);
+  // Engine flares at the rear — two emissive cones pointing -X (backward).
+  // Stored so the tick can flicker their intensity.
+  const flagshipEngineMat = new THREE.MeshBasicMaterial({
+    color: 0x4cc9f0, transparent: true, opacity: 0.85, fog: false,
+  });
+  const flagshipEngines: THREE.Mesh[] = [];
+  for (const z of [-0.45, 0.45]) {
+    const e = new THREE.Mesh(
+      new THREE.ConeGeometry(0.12, 0.6, 12),
+      flagshipEngineMat.clone(),
+    );
+    // Cone default tip at +Y; rotate so tip points -X (out the back).
+    e.rotation.z = Math.PI / 2;
+    e.position.set(-1.15, 0, z);
+    flagship.add(e);
+    flagshipEngines.push(e);
+  }
   flagship.scale.setScalar(1.8);
   flagship.position.set(-5, 2.5, -1);
   empireLayer.add(flagship);
@@ -1930,6 +1947,15 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       if (empireLayer.visible) {
         flagship.position.x = -5 + Math.sin(elapsed * 0.3) * 0.4;
         flagship.rotation.y = Math.sin(elapsed * 0.25) * 0.15;
+        // Engine flicker — opacity pulses + slight scale pump to read as thrust.
+        for (let i = 0; i < flagshipEngines.length; i++) {
+          const e = flagshipEngines[i];
+          const mat = e.material as THREE.MeshBasicMaterial;
+          const f = 0.7 + Math.sin(elapsed * 18 + i * 1.4) * 0.25;
+          mat.opacity = 0.55 + f * 0.45;
+          // Stretch cone a little along its length on intense pulses.
+          e.scale.set(1, 1 + (f - 0.7) * 0.8, 1);
+        }
         for (let i = 0; i < fleet.length; i++) {
           const f = fleet[i];
           const baseY = (f.userData.baseY ??= f.position.y);
