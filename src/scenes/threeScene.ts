@@ -1041,6 +1041,37 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     { shirt: 0x27ae60, pants: 0x462810, skin: 0xc78f70, hat: 0x9be7ff },
   ];
 
+  // Shared "PIZZA" sticker texture for customer + drone pizza boxes.
+  const pizzaStickerTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 128; cv.height = 128;
+    const ctx = cv.getContext("2d")!;
+    ctx.fillStyle = "rgba(255,255,255,0)";
+    ctx.fillRect(0, 0, 128, 128);
+    // Glowy pink text on a transparent background
+    ctx.fillStyle = "#0a0e1a";
+    ctx.beginPath();
+    ctx.roundRect(8, 38, 112, 52, 8);
+    ctx.fill();
+    ctx.fillStyle = "#ffaad4";
+    ctx.font = "bold 38px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#ff3b88";
+    ctx.shadowBlur = 12;
+    ctx.fillText("PIZZA", 64, 64);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const pizzaStickerGeo = new THREE.PlaneGeometry(0.26, 0.13);
+  const pizzaStickerMat = new THREE.MeshBasicMaterial({
+    map: pizzaStickerTex,
+    transparent: true,
+    depthWrite: false,
+    fog: false,
+  });
+
   function makeCustomer(): Customer {
     const palette = customerPalettes[Math.floor(Math.random() * customerPalettes.length)];
     const g = new THREE.Group();
@@ -1098,6 +1129,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     );
     boxLid.position.y = 0.045;
     pizzaBox.add(boxLid);
+    // Glowy "PIZZA" sticker on the lid — brand-matches the neon sign.
+    const sticker = new THREE.Mesh(pizzaStickerGeo, pizzaStickerMat);
+    sticker.rotation.x = -Math.PI / 2;
+    sticker.position.y = 0.06;
+    pizzaBox.add(sticker);
     pizzaBox.position.set(0, 0.85, 0.22); // held in front of torso
     pizzaBox.visible = false;
     g.add(pizzaBox);
@@ -1429,6 +1465,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const lid = new THREE.Mesh(droneBoxLidGeo, droneBoxLidMat);
     lid.position.y = 0.045;
     payload.add(lid);
+    // Branded "PIZZA" sticker on the lid, slightly offset from the LED.
+    const droneSticker = new THREE.Mesh(pizzaStickerGeo, pizzaStickerMat);
+    droneSticker.rotation.x = -Math.PI / 2;
+    droneSticker.position.set(-0.04, 0.06, -0.04);
+    payload.add(droneSticker);
     // Tiny "delivery in progress" LED on top of the lid — blinks per-drone.
     const ledMat = new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: 1, fog: false });
     const led = new THREE.Mesh(droneLEDGeo, ledMat);
