@@ -2459,6 +2459,21 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       pep.rotation.x = Math.PI / 2;
       m.add(pep);
     }
+    // Atmosphere halo — slightly larger back-side sphere with additive
+    // cyan, same pattern as Earth's halo.
+    const moonHalo = new THREE.Mesh(
+      new THREE.SphereGeometry(1.45, 20, 14),
+      new THREE.MeshBasicMaterial({
+        color: 0xffd87a,
+        transparent: true,
+        opacity: 0.18,
+        blending: THREE.AdditiveBlending,
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false,
+      }),
+    );
+    m.add(moonHalo);
     m.scale.setScalar(moonScale);
     finalLayer.add(m);
     pizzaMoons.push({
