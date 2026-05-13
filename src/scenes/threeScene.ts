@@ -3251,9 +3251,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         st.sprite.material.opacity = (1 - t) * 0.55;
         st.sprite.scale.setScalar(0.3 + t * 0.5);
       }
-      // Wall clock — accelerated time: minute hand completes a revolution
-      // every 6s, hour hand 12× slower (= every 72s).
-      minuteHand.rotation.z = -elapsed * (Math.PI * 2 / 6);
+      // Wall clock — accelerated time. Minute hand snaps to discrete 12-
+      // position ticks (5-min marks) like a real wall clock; hour hand
+      // sweeps smoothly.
+      const minuteAngle = elapsed * (Math.PI * 2 / 6);
+      const tickStep = (Math.PI * 2) / 12;
+      minuteHand.rotation.z = -Math.round(minuteAngle / tickStep) * tickStep;
       hourHand.rotation.z = -elapsed * (Math.PI * 2 / 72);
       // Awning bulbs — each twinkles with its own phase.
       for (const ab of awningBulbs) {
