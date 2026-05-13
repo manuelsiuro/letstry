@@ -379,16 +379,22 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const smokeGeo = new THREE.SphereGeometry(0.09, 6, 5);
   const marketingStarGeo = new THREE.OctahedronGeometry(0.1, 0);
 
-  // Robot-arm shared geometries (reused across all oven arms)
-  const armMountGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.06, 8);
-  const armUpperGeo = new THREE.BoxGeometry(0.06, 0.22, 0.06);
-  const armElbowGeo = new THREE.SphereGeometry(0.04, 8, 6);
-  const armForearmGeo = new THREE.BoxGeometry(0.05, 0.18, 0.05);
-  const armPincerGeo = new THREE.BoxGeometry(0.02, 0.06, 0.02);
-  // Pivot upper segment from its TOP so it hangs down from the mount
-  armUpperGeo.translate(0, -0.11, 0);
-  // Pivot forearm from its TOP (elbow) so rotation pivots at the elbow
-  armForearmGeo.translate(0, -0.09, 0);
+  // Robot-arm shared geometries (reused across all oven arms). Sized large
+  // enough to read clearly at camera distance — these are visible upgrades,
+  // they need to "show off" the automation.
+  const armMountGeo = new THREE.BoxGeometry(0.18, 0.06, 0.18);
+  const armShoulderGeo = new THREE.SphereGeometry(0.07, 12, 10);
+  const armUpperGeo = new THREE.CylinderGeometry(0.05, 0.06, 0.3, 10);
+  const armElbowGeo = new THREE.SphereGeometry(0.07, 12, 10);
+  const armForearmGeo = new THREE.CylinderGeometry(0.045, 0.05, 0.26, 10);
+  const armWristGeo = new THREE.SphereGeometry(0.04, 10, 8);
+  const armPincerGeo = new THREE.BoxGeometry(0.035, 0.12, 0.025);
+  // Pivot upper segment from its TOP so it hangs down from the shoulder.
+  armUpperGeo.translate(0, -0.15, 0);
+  // Pivot forearm from its TOP (elbow) so rotation pivots at the elbow.
+  armForearmGeo.translate(0, -0.13, 0);
+  // Pivot pincer bars at their TOP (wrist) so they hang.
+  armPincerGeo.translate(0, -0.06, 0);
 
   // (Bike + drone geometry/materials live inside their GLBs.)
 
@@ -433,8 +439,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // Per-oven dynamic props (flame, smoke, bot-arm) — maintained alongside `ovens[]`
   const flameMat = new THREE.MeshStandardMaterial({ color: 0xff7722, emissive: 0xff4400, emissiveIntensity: 1.2, roughness: 0.3 });
   const smokeMat = new THREE.MeshStandardMaterial({ color: 0x888888, transparent: true, opacity: 0.5, roughness: 1 });
-  const botArmMat = new THREE.MeshStandardMaterial({ color: 0x444a55, roughness: 0.5 });
-  const botArmJointMat = new THREE.MeshStandardMaterial({ color: 0x4cc9f0, emissive: 0x4cc9f0, emissiveIntensity: 0.5, roughness: 0.4 });
+  const botArmMat = new THREE.MeshStandardMaterial({ color: 0xb8c0cc, roughness: 0.3, metalness: 0.7 });
+  const botArmJointMat = new THREE.MeshStandardMaterial({ color: 0x4cc9f0, emissive: 0x4cc9f0, emissiveIntensity: 1.4, roughness: 0.3 });
+  const botArmWristLEDMat = new THREE.MeshStandardMaterial({ color: 0xff3366, emissive: 0xff3366, emissiveIntensity: 1.6, roughness: 0.4 });
 
   type SmokePuff = { mesh: THREE.Mesh; offset: number };
   type OvenProps = { flame: THREE.Mesh; smoke: SmokePuff[]; arm: THREE.Group };
@@ -465,32 +472,49 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   }
   function makeRobotArm(): THREE.Group {
     const g = new THREE.Group();
-    // Ceiling mount at top of group (y=0 is the anchor / "ceiling" point)
+    // Ceiling mount plate at top of group (y=0 is the anchor / "ceiling")
     const mount = new THREE.Mesh(armMountGeo, matDark);
-    mount.position.y = -0.03; // half-height so its top sits at y=0
+    mount.position.y = -0.03;
     g.add(mount);
-    // Upper segment hangs down from below the mount; geo is pivot-at-top
+    // Glowing shoulder pivot just below the mount
+    const shoulder = new THREE.Mesh(armShoulderGeo, botArmJointMat);
+    shoulder.position.y = -0.08;
+    g.add(shoulder);
+    // Upper segment hangs down from the shoulder (geo is pivot-at-top)
     const upper = new THREE.Mesh(armUpperGeo, botArmMat);
-    upper.position.y = -0.06;
+    upper.position.y = -0.08;
     g.add(upper);
     // Elbow joint at the bottom of the upper segment
-    const elbowY = -0.06 - 0.22;
+    const elbowY = -0.08 - 0.3;
     const elbow = new THREE.Mesh(armElbowGeo, botArmJointMat);
     elbow.position.y = elbowY;
     g.add(elbow);
-    // Forearm angled forward (~30deg) from the elbow; pivot-at-top
+    // Forearm angled forward (~35deg) from the elbow; pivot-at-top
+    const angle = Math.PI / 5; // 36deg
     const forearm = new THREE.Mesh(armForearmGeo, botArmMat);
     forearm.position.y = elbowY;
-    forearm.rotation.x = Math.PI / 6; // 30deg forward
+    forearm.rotation.x = angle;
     g.add(forearm);
-    // Pincer: two short bars at the tip of the forearm
-    const tipY = elbowY - Math.cos(Math.PI / 6) * 0.18;
-    const tipZ = Math.sin(Math.PI / 6) * 0.18;
-    const pincerL = new THREE.Mesh(armPincerGeo, matDark);
-    pincerL.position.set(-0.025, tipY - 0.03, tipZ);
+    // Wrist tip — small glowing sphere
+    const tipY = elbowY - Math.cos(angle) * 0.26;
+    const tipZ = Math.sin(angle) * 0.26;
+    const wrist = new THREE.Mesh(armWristGeo, botArmJointMat);
+    wrist.position.set(0, tipY, tipZ);
+    g.add(wrist);
+    // Wrist LED — small red dot indicator
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), botArmWristLEDMat);
+    led.position.set(0, tipY, tipZ + 0.04);
+    g.add(led);
+    // Pincer: two angled bars sprouting from the wrist
+    const pincerL = new THREE.Mesh(armPincerGeo, botArmMat);
+    pincerL.position.set(-0.04, tipY - 0.02, tipZ + 0.02);
+    pincerL.rotation.x = angle * 0.6;
+    pincerL.rotation.z = 0.2;
     g.add(pincerL);
-    const pincerR = new THREE.Mesh(armPincerGeo, matDark);
-    pincerR.position.set(0.025, tipY - 0.03, tipZ);
+    const pincerR = new THREE.Mesh(armPincerGeo, botArmMat);
+    pincerR.position.set(0.04, tipY - 0.02, tipZ + 0.02);
+    pincerR.rotation.x = angle * 0.6;
+    pincerR.rotation.z = -0.2;
     g.add(pincerR);
     return g;
   }
@@ -642,27 +666,106 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   function spawnDrone(): void {
     const d = new THREE.Group() as Drone;
     onModelReady("drone", (clone) => {
-      clone.scale.setScalar(0.4);
+      clone.scale.setScalar(0.65);
       d.add(clone);
     });
     d.userData.angle = Math.random() * Math.PI * 2;
-    d.userData.radius = 1.8 + Math.random() * 1.2;
-    d.userData.speed = 0.6 + Math.random() * 0.5;
-    d.userData.tilt = Math.random() * 0.6 - 0.3;
+    // Spread across two orbit shells so the swarm reads as a swarm,
+    // not a single ring overlapping Earth.
+    d.userData.radius = 2.2 + Math.random() * 2.0;
+    d.userData.speed = 0.5 + Math.random() * 0.6;
+    d.userData.tilt = (Math.random() - 0.5) * 1.4;
     cosmicLayer.add(d);
     drones.push(d);
   }
 
   // ---- Final layer (pizza-sun) ----
+  // The final phase is "BECOME THE PIZZA" so the celestial body needs to
+  // read as a giant pizza, not a plain orange disc: crust, cheese, sauce
+  // pools, pepperoni discs, all glowing like a sun.
   const finalLayer = new THREE.Group();
   finalLayer.visible = false;
   scene.add(finalLayer);
-  const pizzaSun = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.2, 2.2, 0.4, 48),
-    new THREE.MeshStandardMaterial({ color: 0xffaa44, emissive: 0xff5522, emissiveIntensity: 1.4, roughness: 0.6 }),
-  );
-  pizzaSun.rotation.x = Math.PI / 2;
+
+  // Build the pizza in the XY plane (Z = thickness) so it faces the camera
+  // without any group-level rotation. Toppings sit at z > 0 (toward camera).
+  const pizzaSun = new THREE.Group();
   finalLayer.add(pizzaSun);
+
+  // Crust — torus in XY plane (its default orientation has axis along Z, ✓)
+  const crust = new THREE.Mesh(
+    new THREE.TorusGeometry(2.15, 0.32, 14, 64),
+    new THREE.MeshStandardMaterial({
+      color: 0xc97a3a,
+      emissive: 0xff5522,
+      emissiveIntensity: 0.9,
+      roughness: 0.55,
+    }),
+  );
+  pizzaSun.add(crust);
+
+  // Cheese / surface — flat disc. CylinderGeometry's axis is Y by default,
+  // so rotate it to align with Z (camera axis).
+  const cheeseDisc = new THREE.Mesh(
+    new THREE.CylinderGeometry(2.15, 2.15, 0.18, 48),
+    new THREE.MeshStandardMaterial({
+      color: 0xffd87a,
+      emissive: 0xffb04a,
+      emissiveIntensity: 1.4,
+      roughness: 0.55,
+    }),
+  );
+  cheeseDisc.rotation.x = Math.PI / 2;
+  pizzaSun.add(cheeseDisc);
+
+  // Sauce pools — slightly darker circles randomly placed on the cheese
+  const sauceGeo = new THREE.CircleGeometry(0.35, 24);
+  const sauceMat = new THREE.MeshStandardMaterial({
+    color: 0xc8341e,
+    emissive: 0xff2a18,
+    emissiveIntensity: 0.9,
+    roughness: 0.5,
+  });
+  for (let i = 0; i < 7; i++) {
+    const s = new THREE.Mesh(sauceGeo, sauceMat);
+    const r = Math.random() * 1.6;
+    const a = Math.random() * Math.PI * 2;
+    s.position.set(Math.cos(a) * r, Math.sin(a) * r, 0.1);
+    s.scale.setScalar(0.5 + Math.random() * 0.8);
+    pizzaSun.add(s);
+  }
+
+  // Pepperoni — small red discs scattered on top, axis along Z so the face
+  // shows toward the camera.
+  const pepGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.05, 18);
+  const pepMat = new THREE.MeshStandardMaterial({
+    color: 0xb22222,
+    emissive: 0xff3322,
+    emissiveIntensity: 0.5,
+    roughness: 0.5,
+  });
+  for (let i = 0; i < 14; i++) {
+    const p = new THREE.Mesh(pepGeo, pepMat);
+    const r = 0.6 + Math.random() * 1.3;
+    const a = Math.random() * Math.PI * 2;
+    p.position.set(Math.cos(a) * r, Math.sin(a) * r, 0.17);
+    p.rotation.x = Math.PI / 2;
+    p.scale.setScalar(0.7 + Math.random() * 0.6);
+    pizzaSun.add(p);
+  }
+
+  // Olive bits — tiny dark green torus rings, default torus orientation
+  // already lies in XY, which is what we want.
+  const oliveGeo = new THREE.TorusGeometry(0.06, 0.025, 6, 10);
+  const oliveMat = new THREE.MeshStandardMaterial({ color: 0x2a4a18, roughness: 0.6 });
+  for (let i = 0; i < 20; i++) {
+    const o = new THREE.Mesh(oliveGeo, oliveMat);
+    const r = 0.4 + Math.random() * 1.5;
+    const a = Math.random() * Math.PI * 2;
+    o.position.set(Math.cos(a) * r, Math.sin(a) * r, 0.19);
+    pizzaSun.add(o);
+  }
+
   const sunGlow = new THREE.PointLight(0xff8844, 3, 30);
   finalLayer.add(sunGlow);
   const finalStars = new THREE.Points(
@@ -1015,6 +1118,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
     // Final pizza-sun
     if (finalLayer.visible) {
+      // Pizza disc faces the camera (XY plane); spin it around its forward
+      // axis so toppings parade past as it rotates.
       pizzaSun.rotation.z = elapsed * 0.2;
       sunGlow.intensity = 3 + Math.sin(elapsed * 2) * 0.6;
     }
