@@ -617,6 +617,41 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     }
   }
 
+  // ---- Flying bird ----
+  // A small two-wing bird that periodically traverses the upper sky.
+  const birdGroup = new THREE.Group();
+  birdGroup.visible = false;
+  shopLayer.add(birdGroup);
+  const birdMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a, fog: true });
+  const birdBody = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.08), birdMat);
+  birdGroup.add(birdBody);
+  const wingGeo = new THREE.BoxGeometry(0.3, 0.02, 0.12);
+  wingGeo.translate(0.15, 0, 0); // pivot at body edge
+  const wingL = new THREE.Mesh(wingGeo, birdMat);
+  wingL.position.set(0.08, 0, 0);
+  birdGroup.add(wingL);
+  const wingR = new THREE.Mesh(wingGeo, birdMat);
+  wingR.position.set(-0.08, 0, 0);
+  wingR.rotation.y = Math.PI; // mirror
+  birdGroup.add(wingR);
+  const birdState = {
+    active: false, startX: 0, endX: 0, y: 4.5, z: -3,
+    progress: 0, duration: 6, dir: 1,
+  };
+  let nextBirdAt = 10 + Math.random() * 10;
+  function spawnBird(): void {
+    birdState.dir = Math.random() < 0.5 ? 1 : -1;
+    birdState.startX = birdState.dir > 0 ? -12 : 12;
+    birdState.endX = -birdState.startX;
+    birdState.y = 4 + Math.random() * 1.5;
+    birdState.z = -2 - Math.random() * 3;
+    birdState.progress = 0;
+    birdState.duration = 5 + Math.random() * 4;
+    birdState.active = true;
+    birdGroup.visible = true;
+    birdGroup.rotation.y = birdState.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+  }
+
   // ---- Atmospheric dust motes ----
   // Slowly drifting particles in front of the shop. Catch warm light from
   // the kitchen + neon sign, so the air looks "lit" rather than empty.
@@ -3190,6 +3225,27 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       const base = p.flavor === "make" ? 0.6 : 0.5;
       const growth = p.flavor === "make" ? 1 + t * 1.8 : 1 + t * 0.4;
       p.sprite.scale.setScalar(base * growth);
+    }
+
+    // Bird flyby — periodic upper-sky traffic.
+    if (shopLayer.visible) {
+      if (!birdState.active && elapsed >= nextBirdAt) {
+        spawnBird();
+      }
+      if (birdState.active) {
+        birdState.progress += dt / birdState.duration;
+        if (birdState.progress >= 1) {
+          birdState.active = false;
+          birdGroup.visible = false;
+          nextBirdAt = elapsed + 12 + Math.random() * 12;
+        } else {
+          const x = birdState.startX + (birdState.endX - birdState.startX) * birdState.progress;
+          birdGroup.position.set(x, birdState.y + Math.sin(birdState.progress * Math.PI * 4) * 0.15, birdState.z);
+          // Wing flap
+          wingL.rotation.z = Math.sin(elapsed * 18) * 0.7;
+          wingR.rotation.z = -Math.sin(elapsed * 18) * 0.7;
+        }
+      }
     }
 
     // Background traffic — schedule + animate.
