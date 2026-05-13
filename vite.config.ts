@@ -18,6 +18,10 @@ export default defineConfig({
   build: {
     target: "es2022",
     sourcemap: true,
+    // three.js and pixi.js are each ~500 KB and unavoidable — bump the
+    // warning threshold so the (now-correctly-split) vendor chunks don't
+    // trigger noise on every build.
+    chunkSizeWarningLimit: 700,
     // Split heavy vendor libs into their own chunks so app code can be
     // re-built / re-cached without re-downloading Three.js or PixiJS.
     rollupOptions: {
