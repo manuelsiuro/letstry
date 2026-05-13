@@ -767,14 +767,24 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   awning.rotation.x = -Math.PI / 2 + 0.35;
   awning.position.set(0, 1.45, 0.7);
   shopLayer.add(awning);
-  // Tiny bulb-string below the awning front edge.
-  const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfff0a8, fog: false });
+  // Tiny bulb-string below the awning front edge. Each bulb has its own
+  // cloned material + phase so the row twinkles.
+  type AwningBulb = { mesh: THREE.Mesh; phase: number };
+  const awningBulbs: AwningBulb[] = [];
+  const bulbBaseMat = new THREE.MeshStandardMaterial({
+    color: 0xfff0a8,
+    emissive: 0xffd87a,
+    emissiveIntensity: 1.5,
+    roughness: 0.3,
+    fog: false,
+  });
   const bulbGeo = new THREE.SphereGeometry(0.045, 8, 6);
   for (let i = 0; i < 8; i++) {
     const x = -1.6 + i * 0.46;
-    const b = new THREE.Mesh(bulbGeo, bulbMat);
+    const b = new THREE.Mesh(bulbGeo, bulbBaseMat.clone());
     b.position.set(x, 1.0, 1.05);
     shopLayer.add(b);
+    awningBulbs.push({ mesh: b, phase: Math.random() * Math.PI * 2 });
   }
 
   // Pizza disc on counter — placeholder until pizza.glb loads
@@ -2703,6 +2713,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // OPEN sign — gentle pendulum sway while shop is visible.
     if (shopLayer.visible) {
       openSignPivot.rotation.z = Math.sin(elapsed * 1.2) * 0.12;
+      // Awning bulbs — each twinkles with its own phase.
+      for (const ab of awningBulbs) {
+        const v = Math.sin(elapsed * 2.4 + ab.phase) * 0.4 + Math.sin(elapsed * 5.1 + ab.phase * 1.7) * 0.2;
+        (ab.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 1.4 + v;
+      }
     }
 
     // Neon pulse
