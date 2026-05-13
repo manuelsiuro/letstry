@@ -15,6 +15,15 @@ export interface ThreeScene {
 }
 
 const FX_ON = new URLSearchParams(window.location.search).get("fx") !== "off";
+// Low-power mode: explicit ?perf=low OR heuristic for low-core devices.
+// Trims particle pools so phones don't melt running the full effects.
+const LOW_POWER = (() => {
+  const qp = new URLSearchParams(window.location.search).get("perf");
+  if (qp === "low") return true;
+  if (qp === "high") return false;
+  const cores = (navigator as Navigator & { hardwareConcurrency?: number }).hardwareConcurrency ?? 8;
+  return cores < 4;
+})();
 
 export function startThreeScene(mount: HTMLElement): ThreeScene {
   const scene = new THREE.Scene();
@@ -534,7 +543,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // ---- Atmospheric dust motes ----
   // Slowly drifting particles in front of the shop. Catch warm light from
   // the kitchen + neon sign, so the air looks "lit" rather than empty.
-  const DUST_COUNT = 80;
+  const DUST_COUNT = LOW_POWER ? 30 : 80;
   const dustGeo = new THREE.BufferGeometry();
   const dustPositions = new Float32Array(DUST_COUNT * 3);
   const dustVelocities: number[] = []; // per-particle [vx, vy, vz]
@@ -1165,7 +1174,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // positions and drift downward, fading out. Visible only when marketing
   // upgrade is owned (= marketingGroup.visible).
   type Glitter = { sprite: THREE.Sprite; vel: THREE.Vector3; life: number; maxLife: number; active: boolean };
-  const GLITTER_POOL = 24;
+  const GLITTER_POOL = LOW_POWER ? 10 : 24;
   const glitter: Glitter[] = [];
   const glitterTex = (() => {
     const cv = document.createElement("canvas");
@@ -2473,7 +2482,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     maxLife: number;
     vel: THREE.Vector3;
   };
-  const PARTICLE_POOL_SIZE = 48;
+  const PARTICLE_POOL_SIZE = LOW_POWER ? 20 : 48;
   const particles: Particle[] = [];
 
   function makePuffTexture(): THREE.CanvasTexture {
