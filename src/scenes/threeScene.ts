@@ -565,7 +565,57 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   const matChefPants = new THREE.MeshStandardMaterial({ color: 0x37404a, roughness: 0.8 });
 
-  type Chef = { group: THREE.Group; armL: THREE.Mesh; armR: THREE.Mesh; phase: number };
+  type Chef = {
+    group: THREE.Group;
+    armL: THREE.Mesh;
+    armR: THREE.Mesh;
+    phase: number;
+    speechSprite: THREE.Sprite;
+    nextSpeechAt: number;
+    speechLife: number;
+    speechMaxLife: number;
+  };
+
+  // Speech bubble textures — generate one per phrase upfront so we can just
+  // swap a sprite's map when a chef "speaks". White rounded rectangle with
+  // the phrase, drawn into a canvas.
+  function makeSpeechTex(phrase: string): THREE.CanvasTexture {
+    const cv = document.createElement("canvas");
+    cv.width = 256; cv.height = 128;
+    const ctx = cv.getContext("2d")!;
+    // Background rounded rect
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    const r = 28;
+    ctx.beginPath();
+    ctx.moveTo(r, 4);
+    ctx.lineTo(256 - r, 4);
+    ctx.quadraticCurveTo(252, 4, 252, r);
+    ctx.lineTo(252, 80 - r);
+    ctx.quadraticCurveTo(252, 80, 256 - r, 80);
+    ctx.lineTo(80, 80);
+    ctx.lineTo(60, 124); // tail pointing down-left
+    ctx.lineTo(50, 80);
+    ctx.lineTo(r, 80);
+    ctx.quadraticCurveTo(4, 80, 4, 80 - r);
+    ctx.lineTo(4, r);
+    ctx.quadraticCurveTo(4, 4, r, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.85)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    // Text
+    ctx.fillStyle = "#222";
+    ctx.font = "bold 42px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(phrase, 128, 40);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+  const speechPhrases = ["PIZZA!", "HOT!", "READY!", "MAMMA MIA!", "FRESH!"];
+  const speechTextures = speechPhrases.map(makeSpeechTex);
   const chefs: Chef[] = [];
   function makeChef(x: number, phase: number): Chef {
     const g = new THREE.Group();
@@ -599,8 +649,26 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     armR.position.set(0.26, 1.1, 0.05);
     g.add(armR);
     g.position.set(x, GROUND_Y, -0.85);
+    // Speech bubble — sprite above the chef's head, initially invisible.
+    const speechSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: speechTextures[0],
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    }));
+    speechSprite.scale.set(0.9, 0.45, 1);
+    speechSprite.position.set(0.4, 2.2, 0);
+    g.add(speechSprite);
     shopLayer.add(g);
-    return { group: g, armL, armR, phase };
+    return {
+      group: g,
+      armL, armR,
+      phase,
+      speechSprite,
+      nextSpeechAt: 2 + Math.random() * 5,
+      speechLife: 0,
+      speechMaxLife: 1.6,
+    };
   }
   chefs.push(makeChef(0, 0));
 
@@ -2098,6 +2166,32 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       }
       c.armL.rotation.x = armLX;
       c.armR.rotation.x = armRX;
+
+      // Speech bubble cycle: spawn a fresh bubble every nextSpeechAt seconds,
+      // each bubble lives speechMaxLife seconds and fades in/out.
+      c.speechLife += dt;
+      if (c.speechLife > c.nextSpeechAt && c.speechLife > c.speechMaxLife + 2) {
+        // Start a new bubble — pick a random phrase, reset the life counter.
+        const idx = Math.floor(Math.random() * speechTextures.length);
+        c.speechSprite.material.map = speechTextures[idx];
+        c.speechSprite.material.needsUpdate = true;
+        c.speechLife = 0;
+        c.speechMaxLife = 1.4 + Math.random() * 0.8;
+        c.nextSpeechAt = c.speechMaxLife + 4 + Math.random() * 6;
+      }
+      // Apply fade in/out + slight bob
+      const sl = c.speechLife;
+      if (sl < c.speechMaxLife) {
+        const k = sl / c.speechMaxLife;
+        // Fade in (0..0.15) then out (0.7..1.0)
+        let op = 1;
+        if (k < 0.15) op = k / 0.15;
+        else if (k > 0.7) op = (1 - k) / 0.3;
+        c.speechSprite.material.opacity = Math.max(0, Math.min(1, op));
+        c.speechSprite.position.y = 2.2 + Math.sin(elapsed * 4 + c.phase) * 0.05;
+      } else {
+        c.speechSprite.material.opacity = 0;
+      }
     }
 
     // Bikes: deliver-then-return state machine
