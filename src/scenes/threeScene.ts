@@ -1268,6 +1268,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     stateTime: number; // seconds in current state
     travelTime: number; // seconds for current depart/return leg
     facing: number; // current Y rotation
+    lastPuffAt: number; // elapsed-timestamp of the last exhaust puff
   };
   const BIKE_SPEED = 3.2; // m/s
   const BIKE_BASE_Y = GROUND_Y + 0.05;
@@ -1309,6 +1310,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       stateTime: -Math.random() * 1.5,
       travelTime: 0,
       facing: 0,
+      lastPuffAt: -Infinity,
     });
   }
 
@@ -3003,6 +3005,16 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       const lean = THREE.MathUtils.clamp((moving ? (b.facing - (b.group.userData.prevFacing ?? b.facing)) / Math.max(dt, 1e-3) : 0) * 0.15, -0.35, 0.35);
       b.group.rotation.z = -lean;
       b.group.userData.prevFacing = b.facing;
+      // Exhaust: emit a puff every ~0.22s while actively driving.
+      if (moving && (b.state === "depart" || b.state === "return")) {
+        if (elapsed - b.lastPuffAt > 0.22) {
+          b.lastPuffAt = elapsed;
+          // Spawn slightly behind the bike based on facing.
+          const backX = b.pos.x - Math.sin(b.facing) * 0.4;
+          const backZ = b.pos.z - Math.cos(b.facing) * 0.4;
+          spawnParticle("make", new THREE.Vector3(backX, b.pos.y + 0.15, backZ));
+        }
+      }
     }
 
     // Customers: arriving → waiting → leaving cycle
