@@ -2570,6 +2570,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // Timestamp when the player most recently entered the final phase, used
   // by the pizza-sun glow ramp.
   let finalEnteredAt = -1;
+  // Timestamp of the last buy event — boosts the bloom strength briefly
+  // so upgrades land with a visible flash.
+  let lastBuyAt = -Infinity;
   // Camera shake — decaying jitter applied on top of the eased cam position
   // when the player makes a pizza. Updated by subscribe + ticked in the
   // animate loop.
@@ -2831,6 +2834,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       const targets = pulseTargetsFor(ev.upgradeId);
       if (targets.length > 0) {
         pulses.push({ targets, startedAt: elapsed });
+        lastBuyAt = elapsed;
       }
     } else if (ev.type === "make") {
       makeAccum += ev.amount ?? 1;
@@ -3267,6 +3271,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       }
     }
 
+    // Bloom boost briefly after a buy event.
+    if (bloomPass) {
+      const sinceBuy = elapsed - lastBuyAt;
+      const buyBoost = sinceBuy < 0.4 ? (1 - sinceBuy / 0.4) * 0.5 : 0;
+      bloomPass.strength = 0.55 + buyBoost;
+    }
     // Neon pulse
     const neonAmt = Math.sin(elapsed * 3) * 0.4;
     neonGlow.intensity = 1.2 + neonAmt;
