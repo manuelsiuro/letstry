@@ -3226,6 +3226,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       // Streetlight cones share a power-line — small synchronized flicker
       // around the 0.18 base opacity.
       lampConeMat.opacity = 0.18 + Math.sin(elapsed * 7.3) * 0.02 + Math.sin(elapsed * 19) * 0.015;
+      // Bot arm joints share the same line — match the flicker on their
+      // cyan emissive intensity.
+      botArmJointMat.emissiveIntensity = 1.4 + Math.sin(elapsed * 7.3) * 0.15 + Math.sin(elapsed * 19) * 0.1;
       // Counter pizza steam — same loop pattern as oven steam.
       for (const st of counterSteamSprites) {
         const t = ((elapsed * 0.4 + st.offset) % 1);
