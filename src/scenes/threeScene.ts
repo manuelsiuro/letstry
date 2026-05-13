@@ -369,17 +369,20 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const carHeadMat = new THREE.MeshBasicMaterial({ color: 0xfff4a0, fog: false });
   const carTailMat = new THREE.MeshBasicMaterial({ color: 0xff3333, fog: false });
   const carHeadGeo = new THREE.SphereGeometry(0.08, 8, 6);
+  const carHeadlights: THREE.Mesh[] = [];
   for (const [hx, hz] of [[0.82, 0.25], [0.82, -0.25]] as Array<[number, number]>) {
     const h = new THREE.Mesh(carHeadGeo, carHeadMat);
     h.position.set(hx, 0.3, hz);
     carBody.add(h);
+    carHeadlights.push(h);
   }
   for (const [tx, tz] of [[-0.82, 0.25], [-0.82, -0.25]] as Array<[number, number]>) {
     const t = new THREE.Mesh(carHeadGeo, carTailMat);
     t.position.set(tx, 0.3, tz);
     carBody.add(t);
   }
-  // Car position state
+  // Car position state — including a scheduled "honk" timeline of t-fractions
+  // within the drive where headlights flash bright for ~150ms.
   const carState = {
     active: false,
     startX: 0,
@@ -388,6 +391,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     duration: 6,
     z: 4.2,
     facing: 1, // +1 = +X direction, -1 = -X
+    honks: [] as number[], // progress-values when honks fire
+    honkFlashUntilSec: 0, // shared timestamp during which lights flash
   };
   let nextCarAt = 6 + Math.random() * 6;
 
@@ -401,6 +406,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     carState.active = true;
     carBody.visible = true;
     carBody.rotation.y = carState.facing > 0 ? Math.PI / 2 : -Math.PI / 2;
+    // Schedule 0-2 honks at random progress points in the drive.
+    carState.honks = [];
+    const honkCount = Math.random() < 0.5 ? 0 : Math.random() < 0.7 ? 1 : 2;
+    for (let i = 0; i < honkCount; i++) carState.honks.push(0.2 + Math.random() * 0.6);
+    carState.honks.sort();
+    carState.honkFlashUntilSec = 0;
   }
 
   // ---- Nighttime city backdrop ----
@@ -2775,6 +2786,15 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         } else {
           const x = carState.startX + (carState.endX - carState.startX) * carState.progress;
           carBody.position.set(x, GROUND_Y, carState.z);
+          // Trigger any honks whose progress threshold we've just passed.
+          while (carState.honks.length > 0 && carState.progress >= carState.honks[0]) {
+            carState.honks.shift();
+            carState.honkFlashUntilSec = elapsed + 0.18;
+          }
+          // Apply current flash state to headlight scale.
+          const flashing = elapsed < carState.honkFlashUntilSec;
+          const scale = flashing ? 1.9 : 1.0;
+          for (const hl of carHeadlights) hl.scale.setScalar(scale);
         }
       }
     }
