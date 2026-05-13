@@ -1781,13 +1781,40 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const ovenLit = ovenProps.some((p) => p.flame.visible);
     kitchenGlow.intensity = ovenLit ? 1.6 + Math.sin(elapsed * 6) * 0.3 : 0.0;
 
-    // Kitchen decor animations — chef bob + kneading arms
+    // Kitchen decor animations — chef bob + arm gesture cycle. Each chef
+    // rotates through three gestures every ~6 seconds with their personal
+    // phase offset:
+    //   knead   — alternating arm swings (the original motion)
+    //   throw   — both arms reach up, as if tossing dough
+    //   stretch — both arms forward, presenting to the customer
     for (let i = 0; i < chefs.length; i++) {
       const c = chefs[i];
       const t = elapsed * 2 + c.phase;
       c.group.position.y = GROUND_Y + Math.sin(t) * 0.03;
-      c.armL.rotation.x = Math.sin(t * 1.5) * 0.6 - 0.4;
-      c.armR.rotation.x = Math.sin(t * 1.5 + Math.PI) * 0.6 - 0.4;
+      // Gesture window: 0..6s with the chef's phase offset
+      const cycle = (elapsed + c.phase) % 6;
+      let armLX = 0;
+      let armRX = 0;
+      if (cycle < 3.2) {
+        // Knead — original swing
+        armLX = Math.sin(t * 1.5) * 0.6 - 0.4;
+        armRX = Math.sin(t * 1.5 + Math.PI) * 0.6 - 0.4;
+      } else if (cycle < 4.6) {
+        // Throw — arms reach high, slight bob with the dough
+        const k = (cycle - 3.2) / 1.4; // 0..1
+        // Bow → throw arc → catch
+        const lift = Math.sin(k * Math.PI) * 1.6 - 0.2;
+        armLX = -lift;
+        armRX = -lift;
+      } else {
+        // Stretch — arms out forward, slight side-to-side
+        const k = (cycle - 4.6) / 1.4;
+        const sway = Math.sin(k * Math.PI * 2) * 0.15;
+        armLX = -0.9 + sway;
+        armRX = -0.9 - sway;
+      }
+      c.armL.rotation.x = armLX;
+      c.armR.rotation.x = armRX;
     }
 
     // Bikes: deliver-then-return state machine
