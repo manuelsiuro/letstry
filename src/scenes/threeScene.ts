@@ -943,6 +943,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const speechPhrases = ["PIZZA!", "HOT!", "READY!", "MAMMA MIA!", "FRESH!"];
   const speechTextures = speechPhrases.map(makeSpeechTex);
   const chefs: Chef[] = [];
+  // Shared shadow-disc geometry + material for chefs and customers.
+  const shadowGeo = new THREE.CircleGeometry(0.4, 24);
+  const shadowMat = new THREE.MeshBasicMaterial({
+    color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false, fog: false,
+  });
+
   function makeChef(x: number, phase: number): Chef {
     const g = new THREE.Group();
     // Legs — geometry already translated up by 0.25 so it spans local [0, 0.5]
@@ -975,6 +981,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     armR.position.set(0.26, 1.1, 0.05);
     g.add(armR);
     g.position.set(x, GROUND_Y, -0.85);
+    // Fake shadow disc at the chef's feet.
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.001; // just above ground to avoid z-fighting
+    shadow.scale.setScalar(0.7);
+    g.add(shadow);
     // Speech bubble — sprite above the chef's head, initially invisible.
     const speechSprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: speechTextures[0],
@@ -1583,6 +1595,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       : new THREE.Vector3((Math.random() - 0.5) * 1.5, GROUND_Y, QUEUE_BASE_Z);
     const exitPos = new THREE.Vector3(-side * (6 + Math.random() * 2), GROUND_Y, 3.2 + Math.random() * 1);
     g.position.copy(spawnPos);
+    // Fake shadow disc at the customer's feet.
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.001;
+    shadow.scale.setScalar(0.6);
+    g.add(shadow);
     // Per-customer body scale variation — same height range as real people.
     const bodyScale = 0.85 + Math.random() * 0.3;
     g.scale.setScalar(bodyScale);
