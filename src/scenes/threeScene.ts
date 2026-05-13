@@ -1500,7 +1500,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     fleet.push(f);
   }
 
-  type Drone = THREE.Group & { userData: { angle: number; radius: number; speed: number; tilt: number; led?: THREE.Mesh; ledPhase?: number } };
+  type Drone = THREE.Group & { userData: { angle: number; radius: number; speed: number; tilt: number; led?: THREE.Mesh; ledPhase?: number; payload?: THREE.Group; wobblePhase?: number } };
   const drones: Drone[] = [];
 
   // Shared geos/materials for the drone payload box — created once, reused.
@@ -1548,6 +1548,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     d.add(payload);
     d.userData.led = led;
     d.userData.ledPhase = Math.random() * Math.PI * 2;
+    d.userData.payload = payload;
+    d.userData.wobblePhase = Math.random() * Math.PI * 2;
     d.userData.angle = Math.random() * Math.PI * 2;
     // Spread across two orbit shells so the swarm reads as a swarm,
     // not a single ring overlapping Earth.
@@ -2647,6 +2649,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
           const v = Math.sin(elapsed * 4 + (d.userData.ledPhase ?? 0));
           const mat = d.userData.led.material as THREE.MeshBasicMaterial;
           mat.opacity = v > 0 ? 1 : 0.15;
+        }
+        // Payload wobble — small tilt + bob to suggest the box swings on
+        // its tether as the drone changes direction.
+        if (d.userData.payload) {
+          const wp = d.userData.wobblePhase ?? 0;
+          d.userData.payload.rotation.z = Math.sin(elapsed * 2.4 + wp) * 0.18;
+          d.userData.payload.rotation.x = Math.cos(elapsed * 1.7 + wp) * 0.12;
+          d.userData.payload.position.y = -0.4 + Math.sin(elapsed * 3.1 + wp) * 0.04;
         }
       }
 
