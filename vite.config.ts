@@ -12,6 +12,8 @@ function getLanIP(): string {
 }
 
 export default defineConfig({
+  // Relative base lets Capacitor serve the build from file:// on Android.
+  base: "./",
   server: { host: true, port: 5173, open: false },
   build: { target: "es2022", sourcemap: true },
   define: {

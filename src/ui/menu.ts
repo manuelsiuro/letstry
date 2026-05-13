@@ -1,6 +1,7 @@
 import QRCode from "qrcode";
 import { clearSave } from "../game/save";
 import { hardReset } from "../game/state";
+import { t, getLocale, setLocale, type Locale } from "../i18n";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -17,7 +18,8 @@ function buildPlayUrl(): string {
 
 function hasSave(): boolean {
   try {
-    return localStorage.getItem("cosmic-pizza:v1") !== null;
+    return localStorage.getItem("cosmic-pizza:v1") !== null
+      || localStorage.getItem("cosmic-pizza:v2") !== null;
   } catch {
     return false;
   }
@@ -33,16 +35,30 @@ export function showMenu(): Promise<void> {
     const logo = el("img", "menu-logo");
     logo.src = "/assets/generated/cosmic-pizza-logo.png";
     logo.alt = "Cosmic Pizza Delivery";
-    const tagline = el(
-      "p",
-      "menu-tagline",
-      "Tap. Bake. Automate. Conquer the cosmos one slice at a time.",
-    );
+    const tagline = el("p", "menu-tagline", t("menu.tagline"));
 
-    const playBtn = el("button", "menu-play", hasSave() ? "▶ CONTINUE" : "▶ PLAY");
+    const playBtn = el("button", "menu-play", hasSave() ? t("menu.continue") : t("menu.play"));
+
+    // Language toggle (EN / FR)
+    const langRow = el("div", "menu-lang");
+    const makeLangBtn = (code: Locale, label: string): HTMLButtonElement => {
+      const b = el("button", "menu-lang-pill", label);
+      if (getLocale() === code) b.classList.add("active");
+      b.addEventListener("click", () => {
+        setLocale(code);
+        for (const c of langRow.children) c.classList.remove("active");
+        b.classList.add("active");
+        tagline.textContent = t("menu.tagline");
+        playBtn.textContent = hasSave() ? t("menu.continue") : t("menu.play");
+        qrLabel.textContent = t("menu.mobile");
+        if (resetLink) resetLink.textContent = t("menu.reset");
+      });
+      return b;
+    };
+    langRow.append(makeLangBtn("en", "EN"), makeLangBtn("fr", "FR"));
 
     const qrSection = el("div", "menu-qr-section");
-    const qrLabel = el("div", "menu-qr-label", "Play on mobile");
+    const qrLabel = el("div", "menu-qr-label", t("menu.mobile"));
     const qrCanvas = document.createElement("canvas");
     qrCanvas.className = "menu-qr";
     const url = buildPlayUrl();
@@ -53,23 +69,24 @@ export function showMenu(): Promise<void> {
     qrUrl.textContent = url;
     qrSection.append(qrLabel, qrCanvas, qrUrl);
 
-    // Reset save (only show if there's something to wipe)
     const footer = el("div", "menu-footer");
+    let resetLink: HTMLButtonElement | null = null;
     if (hasSave()) {
-      const resetLink = el("button", "menu-reset", "Reset save");
+      resetLink = el("button", "menu-reset", t("menu.reset"));
       resetLink.addEventListener("click", () => {
-        if (!confirm("Wipe your save and start fresh?")) return;
+        if (!confirm(t("menu.resetConfirm"))) return;
         clearSave();
         hardReset();
-        playBtn.textContent = "▶ PLAY";
-        resetLink.remove();
+        playBtn.textContent = t("menu.play");
+        resetLink?.remove();
+        resetLink = null;
       });
       footer.append(resetLink);
     }
-    const credit = el("div", "menu-credit", "Three.js + PixiJS + a little dough");
+    const credit = el("div", "menu-credit", t("menu.credit"));
     footer.append(credit);
 
-    card.append(logo, tagline, playBtn, qrSection, footer);
+    card.append(logo, tagline, langRow, playBtn, qrSection, footer);
     root.append(card);
     document.body.append(root);
 
@@ -79,7 +96,7 @@ export function showMenu(): Promise<void> {
       color: { dark: "#0a0e1a", light: "#ffffffff" },
     }).catch(() => {
       qrCanvas.style.display = "none";
-      qrLabel.textContent = "QR unavailable";
+      qrLabel.textContent = t("menu.qrUnavailable");
     });
 
     playBtn.addEventListener("click", () => {

@@ -6,3 +6,6 @@ dist
 .env.local
 .vite
 .tmp
+
+# remember plugin runtime data
+.remember/logs/

@@ -11,6 +11,10 @@ export async function startPixiOverlay(mount: HTMLElement): Promise<void> {
     antialias: true,
     autoDensity: true,
     resolution: Math.min(window.devicePixelRatio, 2),
+    // Force WebGL — WebGPU on Android WebView is inconsistent, and Three.js
+    // already holds a WebGL context. Asking for the same backend keeps things
+    // predictable across web and Capacitor.
+    preference: "webgl",
   });
   const canvas = app.canvas;
   canvas.style.position = "absolute";
@@ -147,6 +151,9 @@ export async function startPixiOverlay(mount: HTMLElement): Promise<void> {
     cosmic: { text: "INTO THE COSMOS", color: 0x4cc9f0 },
     final: { text: "THE FINAL RECIPE", color: 0xffaa44 },
     credits: { text: "YOU ARE THE PIZZA", color: 0xffffff },
+    multiverse: { text: "MULTIVERSE BAKERY", color: 0xc79bff },
+    timeloop: { text: "TIME LOOP KITCHEN", color: 0x4cc9f0 },
+    empire: { text: "GALACTIC EMPIRE", color: 0xffd54a },
   };
 
   subscribe((s: GameState, ev?: GameEvent) => {
