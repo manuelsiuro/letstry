@@ -36,6 +36,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // ---- Post-processing (gated by ?fx) ----
   let composer: EffectComposer | null = null;
   let bloomPass: UnrealBloomPass | null = null;
+  let chromAberrPass: ShaderPass | null = null;
   if (FX_ON) {
     composer = new EffectComposer(renderer);
     composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -79,6 +80,35 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       `,
     };
     composer.addPass(new ShaderPass(vignetteShader));
+    // Chromatic aberration — only enabled in cosmic phase group. Offsets
+    // R/B channels radially to suggest interstellar lens distortion.
+    chromAberrPass = new ShaderPass({
+      uniforms: {
+        tDiffuse: { value: null },
+        amount: { value: 0.0035 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform float amount;
+        varying vec2 vUv;
+        void main() {
+          vec2 dir = vUv - 0.5;
+          float r = texture2D(tDiffuse, vUv + dir * amount).r;
+          float g = texture2D(tDiffuse, vUv).g;
+          float b = texture2D(tDiffuse, vUv - dir * amount).b;
+          gl_FragColor = vec4(r, g, b, 1.0);
+        }
+      `,
+    });
+    chromAberrPass.enabled = false;
+    composer.addPass(chromAberrPass);
     composer.addPass(new OutputPass());
   }
 
@@ -3039,6 +3069,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       }
     }
 
+    if (chromAberrPass) chromAberrPass.enabled = cosmicLayer.visible;
     if (composer) {
       composer.render();
     } else {
