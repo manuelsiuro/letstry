@@ -3,6 +3,7 @@ import { startPixiOverlay } from "./scenes/pixiOverlay";
 import { mountHud } from "./ui/hud";
 import { showMenu } from "./ui/menu";
 import { loadSaved, startAutosave, SAVE_KEYS } from "./game/save";
+import * as gameState from "./game/state";
 import { initI18n, LOCALE_STORAGE_KEY } from "./i18n";
 import { hydrate, isNative } from "./platform/storage";
 import { StatusBar, Style } from "@capacitor/status-bar";
@@ -30,5 +31,8 @@ async function bootstrap(): Promise<void> {
   try { mountHud(); } catch (e) { console.error("hud failed", e); }
   startAutosave();
 }
+
+// Dev-only debug hook for QA / scripted browser tests.
+(window as unknown as { __game: typeof gameState }).__game = gameState;
 
 bootstrap();

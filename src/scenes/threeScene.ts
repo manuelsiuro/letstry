@@ -42,9 +42,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     composer.addPass(new RenderPass(scene, camera));
     bloomPass = new UnrealBloomPass(
       new THREE.Vector2(mount.clientWidth, mount.clientHeight),
-      0.45, // strength
-      0.7,  // radius
-      0.85, // threshold
+      0.55, // strength
+      0.75, // radius
+      0.7,  // threshold
     );
     composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
@@ -130,15 +130,33 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   }
 
   // ---- Lights ----
-  const key = new THREE.DirectionalLight(0xffe7b8, 1.6);
+  // Warm key from camera-right, cool fill from camera-left, soft ambient so
+  // the kitchen reads volumetrically instead of flat-shaded.
+  const key = new THREE.DirectionalLight(0xffe7b8, 1.7);
   key.position.set(4, 6, 3);
   scene.add(key);
-  scene.add(new THREE.AmbientLight(0x404060, 0.9));
-  const neonGlow = new THREE.PointLight(0xff3b88, 1.2, 8);
+  const fill = new THREE.DirectionalLight(0x8ca8d8, 0.6);
+  fill.position.set(-5, 3, 2);
+  scene.add(fill);
+  // Rim from behind the counter — picks out chef silhouette + oven edges.
+  const rim = new THREE.DirectionalLight(0xff7a4a, 0.9);
+  rim.position.set(0, 3, -4);
+  scene.add(rim);
+  scene.add(new THREE.AmbientLight(0x404060, 0.55));
+  // Neon sign glow — pulses with the sign canvas.
+  const neonGlow = new THREE.PointLight(0xff3b88, 1.4, 8);
   neonGlow.position.set(0, 2.2, 0.4);
   scene.add(neonGlow);
+  // Warm point inside the kitchen — sells the "lit oven" feeling.
+  const kitchenGlow = new THREE.PointLight(0xff7733, 1.6, 6, 1.5);
+  kitchenGlow.position.set(0, 0.4, -1.0);
+  scene.add(kitchenGlow);
 
   // ---- Shop layer ----
+  // Ground level — every shop prop is anchored to this so a future tweak
+  // moves everything together.
+  const GROUND_Y = -0.5;
+
   const shopLayer = new THREE.Group();
   scene.add(shopLayer);
 
@@ -147,37 +165,46 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     new THREE.MeshStandardMaterial({ color: 0x1a1f2e, roughness: 0.95 }),
   );
   ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.5;
+  ground.position.y = GROUND_Y;
   shopLayer.add(ground);
 
+  // Counter: shorter than before so the chef behind it remains visible from
+  // the front camera. Spans y = GROUND_Y .. GROUND_Y + 0.85 (top at -0.05),
+  // with the counter top slab at y = -0.05 + 0.04 = -0.01 (rounded to 0).
   const counter = new THREE.Mesh(
-    new THREE.BoxGeometry(3.2, 1, 1.2),
+    new THREE.BoxGeometry(3.4, 0.85, 1.2),
     new THREE.MeshStandardMaterial({ color: 0xe04848, roughness: 0.4 }),
   );
-  counter.position.set(0, 0, 0);
+  counter.position.set(0, GROUND_Y + 0.425, 0);
   shopLayer.add(counter);
 
+  const counterTopY = GROUND_Y + 0.85 + 0.04; // 0.39
   const counterTop = new THREE.Mesh(
-    new THREE.BoxGeometry(3.3, 0.08, 1.3),
+    new THREE.BoxGeometry(3.5, 0.08, 1.3),
     new THREE.MeshStandardMaterial({ color: 0xf5e6c8, roughness: 0.6 }),
   );
-  counterTop.position.set(0, 0.55, 0);
+  counterTop.position.set(0, counterTopY, 0);
   shopLayer.add(counterTop);
 
   const ovens: THREE.Group[] = [];
+  // oven.glb is 1.95m tall with its pivot at the BASE (Y=0). At scale 0.65
+  // an oven is 1.27m tall, so its top reaches y = GROUND_Y + 1.27 ≈ 0.77 —
+  // safely above the counter top (y=0.55) so it's actually visible.
+  const OVEN_SCALE = 0.65;
   function makeOven(x: number): THREE.Group {
     const g = new THREE.Group();
-    g.position.set(x, 0, -1.2);
+    g.position.set(x, GROUND_Y, -1.35);
     const placeholder = new THREE.Mesh(
-      new THREE.BoxGeometry(0.9, 0.9, 0.9),
+      new THREE.BoxGeometry(0.9, 1.2, 0.9),
       new THREE.MeshStandardMaterial({ color: 0x664433, roughness: 0.7, emissive: 0xff5500, emissiveIntensity: 0.4 }),
     );
+    placeholder.position.y = 0.6;
     g.add(placeholder);
     onModelReady("oven", (clone) => {
       g.remove(placeholder);
       placeholder.geometry.dispose();
       (placeholder.material as THREE.Material).dispose();
-      clone.scale.setScalar(0.45);
+      clone.scale.setScalar(OVEN_SCALE);
       g.add(clone);
     });
     return g;
@@ -215,7 +242,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   // Pizza disc on counter — placeholder until pizza.glb loads
   const pizza = new THREE.Group();
-  pizza.position.set(0, 0.62, 0);
+  pizza.position.set(0, counterTopY + 0.03, 0);
   shopLayer.add(pizza);
   const pizzaPlaceholder = new THREE.Mesh(
     new THREE.CylinderGeometry(0.45, 0.45, 0.06, 24),
@@ -243,8 +270,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   // (Toppings are baked into pizza.glb — no inline mesh needed.)
 
-  // Chef factory — low-poly humanoid
-  // Shared geometries (built once, pivot-translated for shoulder rotation)
+  // Chef factory — low-poly humanoid. Local origin = feet on floor (y=0 in
+  // group-space). Group is placed at y=GROUND_Y so the chef stands on the
+  // floor instead of floating inside the counter.
+  const chefLegGeo = new THREE.BoxGeometry(0.13, 0.5, 0.13);
+  chefLegGeo.translate(0, 0.25, 0); // pivot at hip top → leg hangs below it
   const chefTorsoGeo = new THREE.CylinderGeometry(0.22, 0.26, 0.7, 12);
   const chefHeadGeo = new THREE.SphereGeometry(0.16, 12, 8);
   const chefToqueBaseGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.08, 10);
@@ -252,37 +282,50 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const chefArmGeo = new THREE.BoxGeometry(0.1, 0.35, 0.1);
   chefArmGeo.translate(0, -0.175, 0); // pivot at shoulder (top of arm)
 
+  const matChefPants = new THREE.MeshStandardMaterial({ color: 0x37404a, roughness: 0.8 });
+
   type Chef = { group: THREE.Group; armL: THREE.Mesh; armR: THREE.Mesh; phase: number };
   const chefs: Chef[] = [];
   function makeChef(x: number, phase: number): Chef {
     const g = new THREE.Group();
+    // Legs — geometry already translated up by 0.25 so it spans local [0, 0.5]
+    // from origin; mesh position is the bottom of the leg (feet on the floor).
+    const legL = new THREE.Mesh(chefLegGeo, matChefPants);
+    legL.position.set(-0.1, 0, 0);
+    g.add(legL);
+    const legR = new THREE.Mesh(chefLegGeo, matChefPants);
+    legR.position.set(0.1, 0, 0);
+    g.add(legR);
+    // Torso (cylinder center y=0.85 → spans 0.5..1.2)
     const torso = new THREE.Mesh(chefTorsoGeo, matWhite);
-    torso.position.y = 0.35;
+    torso.position.y = 0.85;
     g.add(torso);
+    // Head & toque
     const head = new THREE.Mesh(chefHeadGeo, matSkin);
-    head.position.y = 0.85;
+    head.position.y = 1.35;
     g.add(head);
     const toqueBase = new THREE.Mesh(chefToqueBaseGeo, matWhite);
-    toqueBase.position.y = 1.0;
+    toqueBase.position.y = 1.5;
     g.add(toqueBase);
     const toqueCap = new THREE.Mesh(chefToqueCapGeo, matWhite);
-    toqueCap.position.y = 1.13;
+    toqueCap.position.y = 1.63;
     g.add(toqueCap);
+    // Arms — pivot at shoulder
     const armL = new THREE.Mesh(chefArmGeo, matWhite);
-    armL.position.set(-0.26, 0.6, 0.05);
+    armL.position.set(-0.26, 1.1, 0.05);
     g.add(armL);
     const armR = new THREE.Mesh(chefArmGeo, matWhite);
-    armR.position.set(0.26, 0.6, 0.05);
+    armR.position.set(0.26, 1.1, 0.05);
     g.add(armR);
-    g.position.set(x, 0.05, -0.85);
+    g.position.set(x, GROUND_Y, -0.85);
     shopLayer.add(g);
     return { group: g, armL, armR, phase };
   }
   chefs.push(makeChef(0, 0));
 
-  // Back wall + shelves
-  const backWall = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.8, 0.1), matCream);
-  backWall.position.set(0, 0.9, -2.1);
+  // Back wall + shelves — wall reaches the floor so no gap shows.
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(5.4, 3.0, 0.1), matCream);
+  backWall.position.set(0, 1.0, -2.1);
   shopLayer.add(backWall);
 
   const shelfGeo = new THREE.BoxGeometry(3.4, 0.05, 0.25);
@@ -326,13 +369,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     shopLayer.add(bulb);
   }
 
-  // Chimney/exhaust hood above ovens (raised so it doesn't clip the chef)
-  const hood = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.22, 0.5), matDark);
-  hood.position.set(0, 1.65, -1.55);
-  shopLayer.add(hood);
-  const flue = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.5, 10), matDark);
-  flue.position.set(0, 2.0, -1.7);
-  shopLayer.add(flue);
+  // (No separate hood: the oven.glb has its own chimney baked in.)
 
   // ---- Upgrade-driven props ----
   // Shared geometries (one per prop type, reused across instances)
@@ -357,7 +394,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   // dough ball — hovers in front of chef, visible when `dough` owned
   const doughBall = new THREE.Mesh(doughGeo, matCream);
-  doughBall.position.set(0, 1.2, 0.35);
+  const doughBaseY = counterTopY + 0.4; // hovers a bit above counter
+  doughBall.position.set(-0.6, doughBaseY, 0.1);
   doughBall.visible = false;
   shopLayer.add(doughBall);
 
@@ -369,7 +407,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   // second pizza disc — visible when `kitchen` owned; sits next to existing one
   const pizza2 = new THREE.Group();
-  pizza2.position.set(0.95, 0.62, 0);
+  pizza2.position.set(0.95, counterTopY + 0.03, 0);
   pizza2.visible = false;
   shopLayer.add(pizza2);
   onModelReady("pizza", (clone) => {
@@ -402,20 +440,25 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   type OvenProps = { flame: THREE.Mesh; smoke: SmokePuff[]; arm: THREE.Group };
   const ovenProps: OvenProps[] = [];
   function makeOvenProps(oven: THREE.Group): OvenProps {
+    // Oven top is at y = GROUND_Y + 1.27 ≈ 0.77 (oven height 1.95 * 0.65).
+    // Flame sits in the door at ~25% of oven height.
+    const ovenTopY = GROUND_Y + 1.95 * OVEN_SCALE;
     const flame = new THREE.Mesh(flameGeo, flameMat);
-    flame.position.set(oven.position.x, oven.position.y + 0.05, oven.position.z + 0.35);
+    flame.position.set(oven.position.x, GROUND_Y + 0.35, oven.position.z + 0.45);
     flame.visible = false;
     shopLayer.add(flame);
     const smoke: SmokePuff[] = [];
     for (let i = 0; i < 3; i++) {
       const s = new THREE.Mesh(smokeGeo, smokeMat.clone());
-      s.position.set(oven.position.x, 1.0, oven.position.z);
+      s.position.set(oven.position.x, ovenTopY, oven.position.z);
+      s.userData.baseY = ovenTopY;
       s.visible = false;
       shopLayer.add(s);
       smoke.push({ mesh: s, offset: i / 3 });
     }
     const arm = makeRobotArm();
-    arm.position.set(oven.position.x, 1.95, oven.position.z + 0.2);
+    // Mounted above the oven, reaching down to grab pizzas.
+    arm.position.set(oven.position.x, ovenTopY + 0.55, oven.position.z + 0.3);
     arm.visible = false;
     shopLayer.add(arm);
     return { flame, smoke, arm };
@@ -460,20 +503,71 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     shopLayer.remove(p.arm);
   }
 
-  // ---- Local layer (bikes orbiting) ----
+  // ---- Local layer (bikes doing delivery runs) ----
   const localLayer = new THREE.Group();
   scene.add(localLayer);
-  const bikes: THREE.Group[] = [];
+
+  // Bike state machine:
+  //   idle  — parked at shop, waiting to leave
+  //   depart— driving from shop to a random destination
+  //   wait  — at customer, briefly stopped (delivering)
+  //   return— driving back to shop
+  type BikeState = "idle" | "depart" | "wait" | "return";
+  type Bike = {
+    group: THREE.Group;
+    park: THREE.Vector3;
+    dest: THREE.Vector3;
+    pos: THREE.Vector3;
+    state: BikeState;
+    stateTime: number; // seconds in current state
+    travelTime: number; // seconds for current depart/return leg
+    facing: number; // current Y rotation
+  };
+  const BIKE_SPEED = 3.2; // m/s
+  const BIKE_BASE_Y = GROUND_Y + 0.05;
+  const bikes: Bike[] = [];
+
+  function pickDestination(): THREE.Vector3 {
+    const angle = Math.random() * Math.PI * 2;
+    // Customers are scattered in front of and around the shop
+    const radius = 4.5 + Math.random() * 2.5;
+    return new THREE.Vector3(
+      Math.cos(angle) * radius,
+      BIKE_BASE_Y,
+      Math.sin(angle) * radius + 1.5,
+    );
+  }
+
+  function parkSpot(index: number): THREE.Vector3 {
+    // Park positions in a row next to the counter, on the customer side
+    const x = -1.4 + index * 0.65;
+    return new THREE.Vector3(x, BIKE_BASE_Y, 1.2);
+  }
+
   function spawnBike(): void {
-    const bike = new THREE.Group();
+    const group = new THREE.Group();
     onModelReady("bike", (clone) => {
-      clone.scale.setScalar(0.5);
-      // Bike GLB is modelled +Y-forward; the orbit code rotates bike.rotation.y
-      // around its own up axis, so no extra base rotation is needed.
-      bike.add(clone);
+      clone.scale.setScalar(0.65);
+      group.add(clone);
     });
-    localLayer.add(bike);
-    bikes.push(bike);
+    const park = parkSpot(bikes.length);
+    group.position.copy(park);
+    localLayer.add(group);
+    bikes.push({
+      group,
+      park,
+      dest: pickDestination(),
+      pos: park.clone(),
+      state: "idle",
+      // Stagger initial timers so bikes don't all depart together
+      stateTime: -Math.random() * 1.5,
+      travelTime: 0,
+      facing: 0,
+    });
+  }
+
+  function easeInOut(t: number): number {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   }
 
   // ---- Cosmic layer (Earth + planets + drones) ----
@@ -579,8 +673,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   // ---- Camera positions per phase ----
   const camTargets: Record<Phase, { pos: THREE.Vector3; look: THREE.Vector3 }> = {
-    shop:       { pos: new THREE.Vector3(0, 1.6, 4.2),  look: new THREE.Vector3(0, 0.8, 0) },
-    local:      { pos: new THREE.Vector3(2.4, 2.4, 5.2), look: new THREE.Vector3(0, 0.8, 0) },
+    shop:       { pos: new THREE.Vector3(0, 2.8, 4.2),  look: new THREE.Vector3(0, 0.1, -1.0) },
+    local:      { pos: new THREE.Vector3(3.2, 2.8, 4.6), look: new THREE.Vector3(0, 0.3, -0.6) },
     cosmic:     { pos: new THREE.Vector3(0, 3, 11),     look: new THREE.Vector3(0, 0, 0) },
     final:      { pos: new THREE.Vector3(0, 0, 7),      look: new THREE.Vector3(0, 0, 0) },
     credits:    { pos: new THREE.Vector3(0, 0, 5),      look: new THREE.Vector3(0, 0, 0) },
@@ -607,7 +701,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     while (bikes.length < desiredBikes) spawnBike();
     while (bikes.length > desiredBikes) {
       const b = bikes.pop()!;
-      localLayer.remove(b);
+      localLayer.remove(b.group);
     }
 
     // second chef if kitchen upgrade
@@ -687,7 +781,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       case "dough":     return [doughBall];
       case "cheese":    return [cheeseWheel];
       case "oven":      return ovenProps.map((p) => p.flame);
-      case "bike":      return bikes.length > 0 ? [bikes[bikes.length - 1]] : [];
+      case "bike":      return bikes.length > 0 ? [bikes[bikes.length - 1].group] : [];
       case "kitchen":   return [pizza2, ...(chefs.length > 1 ? [chefs[chefs.length - 1].group] : [])];
       case "marketing": return [marketingGroup];
       case "bots":      return ovenProps.map((p) => p.arm);
@@ -748,7 +842,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // Dough ball: spin + bob
     if (doughBall.visible) {
       doughBall.rotation.y = elapsed * 1.5;
-      doughBall.position.y = 1.2 + Math.sin(elapsed * 2) * 0.06;
+      doughBall.position.y = doughBaseY + Math.sin(elapsed * 2) * 0.06;
     }
     // Cheese wheel: slow spin
     if (cheeseWheel.visible) {
@@ -764,13 +858,16 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       for (const puff of p.smoke) {
         if (!puff.mesh.visible) continue;
         const t = ((elapsed * 0.5 + puff.offset) % 1);
-        puff.mesh.position.y = 1.0 + t * 1.0;
+        const baseY = (puff.mesh.userData.baseY as number) ?? 0.8;
+        puff.mesh.position.y = baseY + t * 1.0;
         const m = puff.mesh.material as THREE.MeshStandardMaterial;
         m.opacity = (1 - t) * 0.5;
       }
       if (p.arm.visible) {
-        p.arm.position.y = 1.95 + Math.sin(elapsed * 4 + p.arm.position.x * 3) * 0.12;
-        p.arm.rotation.y = Math.sin(elapsed * 3 + p.arm.position.x) * 0.5;
+        // Bob slightly + sweep side-to-side as if working.
+        const baseY = (p.arm.userData.baseY ??= p.arm.position.y);
+        p.arm.position.y = baseY + Math.sin(elapsed * 4 + p.arm.position.x * 3) * 0.06;
+        p.arm.rotation.y = Math.sin(elapsed * 2.5 + p.arm.position.x) * 0.45;
       }
     }
     // Marketing star fountain
@@ -800,24 +897,98 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       for (const target of pl.targets) target.scale.setScalar(scale);
     }
     // Neon pulse
-    neonGlow.intensity = 1.0 + Math.sin(elapsed * 3) * 0.4;
+    neonGlow.intensity = 1.2 + Math.sin(elapsed * 3) * 0.4;
+    // Kitchen glow tied to flame intensity — dims out when ovens are off.
+    const ovenLit = ovenProps.some((p) => p.flame.visible);
+    kitchenGlow.intensity = ovenLit ? 1.6 + Math.sin(elapsed * 6) * 0.3 : 0.0;
 
     // Kitchen decor animations — chef bob + kneading arms
     for (let i = 0; i < chefs.length; i++) {
       const c = chefs[i];
       const t = elapsed * 2 + c.phase;
-      c.group.position.y = 0.05 + Math.sin(t) * 0.03;
+      c.group.position.y = GROUND_Y + Math.sin(t) * 0.03;
       c.armL.rotation.x = Math.sin(t * 1.5) * 0.6 - 0.4;
       c.armR.rotation.x = Math.sin(t * 1.5 + Math.PI) * 0.6 - 0.4;
     }
 
-    // Bikes orbit the counter
+    // Bikes: deliver-then-return state machine
     for (let i = 0; i < bikes.length; i++) {
       const b = bikes[i];
-      const angle = elapsed * 0.9 + (i * (Math.PI * 2)) / bikes.length;
-      const r = 2.2 + (i % 2) * 0.4;
-      b.position.set(Math.cos(angle) * r, 0.2, Math.sin(angle) * r + 0.3);
-      b.rotation.y = -angle + Math.PI / 2;
+      // Re-anchor park spot (in case bike count changed since last frame)
+      b.park.copy(parkSpot(i));
+      b.stateTime += dt;
+      const prev = b.pos.clone();
+
+      switch (b.state) {
+        case "idle": {
+          b.pos.copy(b.park);
+          if (b.stateTime >= 0.8) {
+            b.state = "depart";
+            b.stateTime = 0;
+            b.dest = pickDestination();
+            b.travelTime = Math.max(0.6, b.park.distanceTo(b.dest) / BIKE_SPEED);
+          }
+          break;
+        }
+        case "depart": {
+          const k = Math.min(1, b.stateTime / b.travelTime);
+          const e = easeInOut(k);
+          b.pos.lerpVectors(b.park, b.dest, e);
+          // Slight arc — lift body mid-journey for visual interest
+          b.pos.y = BIKE_BASE_Y + Math.sin(k * Math.PI) * 0.08;
+          if (k >= 1) {
+            b.state = "wait";
+            b.stateTime = 0;
+          }
+          break;
+        }
+        case "wait": {
+          b.pos.copy(b.dest);
+          if (b.stateTime >= 0.9) {
+            b.state = "return";
+            b.stateTime = 0;
+            b.travelTime = Math.max(0.6, b.park.distanceTo(b.dest) / BIKE_SPEED);
+          }
+          break;
+        }
+        case "return": {
+          const k = Math.min(1, b.stateTime / b.travelTime);
+          const e = easeInOut(k);
+          b.pos.lerpVectors(b.dest, b.park, e);
+          b.pos.y = BIKE_BASE_Y + Math.sin(k * Math.PI) * 0.08;
+          if (k >= 1) {
+            b.state = "idle";
+            b.stateTime = 0;
+          }
+          break;
+        }
+      }
+
+      // Face direction of travel; smoothly turn when stationary
+      const vx = b.pos.x - prev.x;
+      const vz = b.pos.z - prev.z;
+      const moving = vx * vx + vz * vz > 1e-6;
+      if (moving) {
+        const target = Math.atan2(vx, vz);
+        // shortest-arc lerp
+        let diff = target - b.facing;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        b.facing += diff * Math.min(1, dt * 8);
+      } else {
+        // Parked bikes face outward (toward customers) so they look ready to go
+        const idleTarget = b.state === "wait" ? Math.atan2(-b.dest.x, -b.dest.z) : 0;
+        let diff = idleTarget - b.facing;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        b.facing += diff * Math.min(1, dt * 3);
+      }
+      b.group.position.copy(b.pos);
+      b.group.rotation.y = b.facing;
+      // Lean on turns: small roll proportional to angular velocity
+      const lean = THREE.MathUtils.clamp((moving ? (b.facing - (b.group.userData.prevFacing ?? b.facing)) / Math.max(dt, 1e-3) : 0) * 0.15, -0.35, 0.35);
+      b.group.rotation.z = -lean;
+      b.group.userData.prevFacing = b.facing;
     }
 
     // Cosmic
