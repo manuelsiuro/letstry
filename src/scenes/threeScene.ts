@@ -1432,6 +1432,55 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     });
   }
 
+  // Pizza slices ejected from the wormhole at random intervals.
+  const sliceTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 128; cv.height = 128;
+    const ctx = cv.getContext("2d")!;
+    ctx.clearRect(0, 0, 128, 128);
+    // Slice = triangle wedge of pizza
+    ctx.save();
+    ctx.translate(64, 18); // apex near top
+    // Crust (outer arc)
+    ctx.fillStyle = "#c97a3a";
+    ctx.beginPath();
+    ctx.moveTo(-60, 105);
+    ctx.lineTo(60, 105);
+    ctx.lineTo(0, 0);
+    ctx.closePath();
+    ctx.fill();
+    // Cheese (inner, smaller triangle)
+    ctx.fillStyle = "#ffd87a";
+    ctx.beginPath();
+    ctx.moveTo(-50, 90);
+    ctx.lineTo(50, 90);
+    ctx.lineTo(0, 12);
+    ctx.closePath();
+    ctx.fill();
+    // 3 pepperoni spots
+    ctx.fillStyle = "#b22222";
+    for (const [px, py, r] of [[-18, 55, 9], [16, 65, 8], [-5, 80, 7]] as Array<[number,number,number]>) {
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  type WormholeSlice = { sprite: THREE.Sprite; vel: THREE.Vector3; spin: number; life: number; maxLife: number; active: boolean };
+  const wormholeSlices: WormholeSlice[] = [];
+  for (let i = 0; i < 6; i++) {
+    const mat = new THREE.SpriteMaterial({ map: sliceTex, transparent: true, opacity: 0, depthWrite: false });
+    const sp = new THREE.Sprite(mat);
+    sp.visible = false;
+    sp.scale.setScalar(0.8);
+    cosmicLayer.add(sp);
+    wormholeSlices.push({ sprite: sp, vel: new THREE.Vector3(), spin: 0, life: 0, maxLife: 1, active: false });
+  }
+  let nextWormholeSliceAt = 0;
+
   // ---- Multiverse: ghost-Earth duplicates that drift around the main planet
   const multiverseLayer = new THREE.Group();
   multiverseLayer.visible = false;
@@ -2653,6 +2702,48 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         r.mesh.rotation.x += dt * r.spinX;
         r.mesh.rotation.y += dt * r.spinY;
         r.mesh.rotation.z += dt * r.spinZ;
+      }
+      // Wormhole occasionally ejects a pizza slice.
+      if (elapsed >= nextWormholeSliceAt) {
+        const slot = wormholeSlices.find((s) => !s.active);
+        if (slot) {
+          slot.sprite.position.copy(wormhole.position);
+          // Random outward direction (mostly toward camera-right)
+          const a = Math.random() * Math.PI * 2;
+          const speed = 1.2 + Math.random() * 0.8;
+          slot.vel.set(
+            Math.cos(a) * speed,
+            0.4 + Math.random() * 0.4,
+            Math.sin(a) * speed * 0.5,
+          );
+          slot.spin = (Math.random() - 0.5) * 6;
+          slot.life = 0;
+          slot.maxLife = 2.4 + Math.random() * 1.0;
+          slot.active = true;
+          slot.sprite.visible = true;
+          slot.sprite.material.rotation = Math.random() * Math.PI * 2;
+        }
+        nextWormholeSliceAt = elapsed + 2 + Math.random() * 3;
+      }
+      for (const ws of wormholeSlices) {
+        if (!ws.active) continue;
+        ws.life += dt;
+        const t = ws.life / ws.maxLife;
+        if (t >= 1) {
+          ws.active = false;
+          ws.sprite.visible = false;
+          continue;
+        }
+        ws.sprite.position.x += ws.vel.x * dt;
+        ws.sprite.position.y += ws.vel.y * dt;
+        ws.sprite.position.z += ws.vel.z * dt;
+        ws.sprite.material.rotation += ws.spin * dt;
+        // Fade-in then fade-out
+        const op = t < 0.15 ? t / 0.15 : (1 - t) / 0.85;
+        ws.sprite.material.opacity = Math.max(0, Math.min(1, op));
+        // Slow shrink toward the end
+        const s = 0.8 * (1 - t * 0.4);
+        ws.sprite.scale.setScalar(s);
       }
       // Shooting stars: tick active ones, possibly spawn a new one.
       if (elapsed >= nextShootingStarAt) {
