@@ -1644,8 +1644,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   function spawnBike(): void {
     const group = new THREE.Group();
+    // Slight per-bike scale variation so the fleet isn't all identical.
+    const bikeScale = 0.58 + Math.random() * 0.14;
     onModelReady("bike", (clone) => {
-      clone.scale.setScalar(0.65);
+      clone.scale.setScalar(bikeScale);
       group.add(clone);
     });
     const park = parkSpot(bikes.length);
