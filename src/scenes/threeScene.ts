@@ -952,6 +952,43 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const speechPhrases = ["PIZZA!", "HOT!", "READY!", "MAMMA MIA!", "FRESH!"];
   const speechTextures = speechPhrases.map(makeSpeechTex);
   const chefs: Chef[] = [];
+  // ---- Thrown dough balls ----
+  // Pool of small white spheres that arc up from a chef's hands during the
+  // "throw" gesture, then fall back down and fade. Reuses geometry so 1-2
+  // chefs throwing don't allocate.
+  type ThrownDough = {
+    mesh: THREE.Mesh;
+    vel: THREE.Vector3;
+    life: number;
+    maxLife: number;
+    active: boolean;
+  };
+  const thrownDoughs: ThrownDough[] = [];
+  const thrownDoughGeo = new THREE.SphereGeometry(0.07, 10, 8);
+  const thrownDoughMat = new THREE.MeshStandardMaterial({
+    color: 0xf5e6c8,
+    roughness: 0.7,
+    transparent: true,
+    opacity: 1,
+  });
+  for (let i = 0; i < 4; i++) {
+    const m = new THREE.Mesh(thrownDoughGeo, thrownDoughMat.clone());
+    m.visible = false;
+    shopLayer.add(m);
+    thrownDoughs.push({ mesh: m, vel: new THREE.Vector3(), life: 0, maxLife: 1, active: false });
+  }
+  function spawnThrownDough(originX: number, originY: number, originZ: number): void {
+    const slot = thrownDoughs.find((d) => !d.active);
+    if (!slot) return;
+    slot.mesh.position.set(originX, originY, originZ);
+    slot.vel.set((Math.random() - 0.5) * 0.4, 2.6 + Math.random() * 0.3, 0.0);
+    slot.life = 0;
+    slot.maxLife = 1.2;
+    slot.active = true;
+    slot.mesh.visible = true;
+    (slot.mesh.material as THREE.MeshStandardMaterial).opacity = 1;
+  }
+
   // Shared shadow-disc geometry + material for chefs and customers.
   const shadowGeo = new THREE.CircleGeometry(0.4, 24);
   const shadowMat = new THREE.MeshBasicMaterial({
@@ -2996,6 +3033,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         // Knead — original swing
         armLX = Math.sin(t * 1.5) * 0.6 - 0.4;
         armRX = Math.sin(t * 1.5 + Math.PI) * 0.6 - 0.4;
+        // Reset the per-cycle throw guard while we're outside the window.
+        c.group.userData.thrownThisCycle = false;
       } else if (cycle < 4.6) {
         // Throw — arms reach high, slight bob with the dough
         const k = (cycle - 3.2) / 1.4; // 0..1
@@ -3003,6 +3042,16 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         const lift = Math.sin(k * Math.PI) * 1.6 - 0.2;
         armLX = -lift;
         armRX = -lift;
+        // Spawn a thrown dough ball at the chef's hands the first frame
+        // we enter this window each cycle.
+        if (!c.group.userData.thrownThisCycle) {
+          c.group.userData.thrownThisCycle = true;
+          spawnThrownDough(
+            c.group.position.x,
+            c.group.position.y + 1.2,
+            c.group.position.z + 0.1,
+          );
+        }
       } else {
         // Stretch — arms out forward, slight side-to-side
         const k = (cycle - 4.6) / 1.4;
@@ -3038,6 +3087,27 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       } else {
         c.speechSprite.material.opacity = 0;
       }
+    }
+
+    // Thrown dough — gravity arc, then fade.
+    for (const d of thrownDoughs) {
+      if (!d.active) continue;
+      d.life += dt;
+      const t = d.life / d.maxLife;
+      if (t >= 1) {
+        d.active = false;
+        d.mesh.visible = false;
+        continue;
+      }
+      d.vel.y -= 6.5 * dt; // gravity
+      d.mesh.position.x += d.vel.x * dt;
+      d.mesh.position.y += d.vel.y * dt;
+      d.mesh.position.z += d.vel.z * dt;
+      d.mesh.rotation.x += dt * 8;
+      d.mesh.rotation.z += dt * 6;
+      // Fade in last 30%
+      const op = t < 0.7 ? 1 : (1 - t) / 0.3;
+      (d.mesh.material as THREE.MeshStandardMaterial).opacity = Math.max(0, op);
     }
 
     // Bikes: deliver-then-return state machine
