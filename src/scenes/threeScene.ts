@@ -3870,7 +3870,13 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       }
     }
 
-    if (chromAberrPass) chromAberrPass.enabled = cosmicLayer.visible;
+    if (chromAberrPass) {
+      chromAberrPass.enabled = cosmicLayer.visible;
+      // Modulate the offset slightly so the lens distortion breathes
+      // instead of looking like a static post-processing layer.
+      chromAberrPass.material.uniforms.amount.value =
+        0.0035 + Math.sin(elapsed * 0.6) * 0.0015;
+    }
     if (scanlinePass) scanlinePass.enabled = finalLayer.visible;
     if (composer) {
       composer.render();
