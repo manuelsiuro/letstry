@@ -313,6 +313,36 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     }
   }
 
+  // ---- Atmospheric dust motes ----
+  // Slowly drifting particles in front of the shop. Catch warm light from
+  // the kitchen + neon sign, so the air looks "lit" rather than empty.
+  const DUST_COUNT = 80;
+  const dustGeo = new THREE.BufferGeometry();
+  const dustPositions = new Float32Array(DUST_COUNT * 3);
+  const dustVelocities: number[] = []; // per-particle [vx, vy, vz]
+  for (let i = 0; i < DUST_COUNT; i++) {
+    dustPositions[i * 3 + 0] = (Math.random() - 0.5) * 8; // x
+    dustPositions[i * 3 + 1] = GROUND_Y + Math.random() * 3.5; // y
+    dustPositions[i * 3 + 2] = -1 + Math.random() * 5; // z (in front of shop)
+    dustVelocities.push(
+      (Math.random() - 0.5) * 0.05,    // vx
+      -(0.05 + Math.random() * 0.12),  // vy (always down)
+      (Math.random() - 0.5) * 0.03,    // vz
+    );
+  }
+  dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
+  const dustMat = new THREE.PointsMaterial({
+    color: 0xffe9b5,
+    size: 0.045,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.55,
+    fog: true,
+    depthWrite: false,
+  });
+  const dust = new THREE.Points(dustGeo, dustMat);
+  shopLayer.add(dust);
+
   // Counter: shorter than before so the chef behind it remains visible from
   // the front camera. Spans y = GROUND_Y .. GROUND_Y + 0.85 (top at -0.05),
   // with the counter top slab at y = -0.05 + 0.04 = -0.01 (rounded to 0).
@@ -1725,6 +1755,24 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       for (const rs of roofSigns) {
         rs.mesh.rotation.y += dt * rs.speed;
       }
+      // Dust drift — integrate per-particle, wrap when below ground or out
+      // of bounds so the cloud stays full forever.
+      const pos = dust.geometry.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < DUST_COUNT; i++) {
+        let x = pos.getX(i) + dustVelocities[i * 3 + 0] * dt;
+        let y = pos.getY(i) + dustVelocities[i * 3 + 1] * dt;
+        let z = pos.getZ(i) + dustVelocities[i * 3 + 2] * dt;
+        if (y < GROUND_Y) {
+          // Respawn at the top with a fresh horizontal position.
+          x = (Math.random() - 0.5) * 8;
+          y = GROUND_Y + 3.5;
+          z = -1 + Math.random() * 5;
+        }
+        if (x < -4.5 || x > 4.5) x = -x * 0.95;
+        if (z < -1.5 || z > 4.5) z = z < -1.5 ? -1.5 + 0.1 : 4.5 - 0.1;
+        pos.setXYZ(i, x, y, z);
+      }
+      pos.needsUpdate = true;
     }
 
     // Neon pulse
