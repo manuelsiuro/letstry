@@ -3083,6 +3083,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // Cosmic
     if (cosmicLayer.visible) {
       earth.rotation.y = elapsed * 0.15;
+      // Slight z-axis precession wobble — Earth tips like a spinning top.
+      earth.rotation.z = Math.sin(elapsed * 0.12) * 0.06;
       // City lights breathe — soft global twinkle.
       cityMat.opacity = 0.75 + Math.sin(elapsed * 1.4) * 0.15;
       stars.rotation.y = elapsed * 0.005;
