@@ -1383,6 +1383,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         for (let i = 0; i < Math.min(2, Math.max(1, Math.round(sellAccum))); i++) spawnParticle("sell");
         sellAccum = 0;
         lastSellEmit = elapsed;
+        // Pizza pop on sell — pulse the disc(s) that are currently visible.
+        const sellTargets: THREE.Object3D[] = [pizza];
+        if (pizza2.visible) sellTargets.push(pizza2);
+        pulses.push({ targets: sellTargets, startedAt: elapsed });
       }
     }
   });
