@@ -1322,6 +1322,35 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     wormhole.add(clone);
   });
 
+  // Warp distortion rings — three additive emissive tori spinning at
+  // different rates and tilts so the wormhole reads as an active portal.
+  type WarpRing = { mesh: THREE.Mesh; spinX: number; spinY: number; spinZ: number };
+  const warpRings: WarpRing[] = [];
+  const warpColors = [0xff4cc9, 0x4cc9f0, 0xff7733];
+  for (let i = 0; i < 3; i++) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(2.0 + i * 0.45, 0.06, 8, 64),
+      new THREE.MeshBasicMaterial({
+        color: warpColors[i],
+        transparent: true,
+        opacity: 0.7 - i * 0.15,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        fog: false,
+      }),
+    );
+    // Initial tilt offsets
+    ring.rotation.x = i * 0.7;
+    ring.rotation.y = i * 0.4;
+    wormhole.add(ring);
+    warpRings.push({
+      mesh: ring,
+      spinX: 0.3 + i * 0.15,
+      spinY: -0.4 + i * 0.2,
+      spinZ: 0.5 - i * 0.1,
+    });
+  }
+
   // ---- Multiverse: ghost-Earth duplicates that drift around the main planet
   const multiverseLayer = new THREE.Group();
   multiverseLayer.visible = false;
@@ -2493,6 +2522,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       earth.rotation.y = elapsed * 0.15;
       stars.rotation.y = elapsed * 0.005;
       wormhole.rotation.z = elapsed * 0.6;
+      // Warp rings spin on independent axes — the portal feels "active".
+      for (const r of warpRings) {
+        r.mesh.rotation.x += dt * r.spinX;
+        r.mesh.rotation.y += dt * r.spinY;
+        r.mesh.rotation.z += dt * r.spinZ;
+      }
       // Shooting stars: tick active ones, possibly spawn a new one.
       if (elapsed >= nextShootingStarAt) {
         spawnShootingStar();
