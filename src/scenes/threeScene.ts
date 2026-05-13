@@ -1899,9 +1899,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     shadow.position.y = 0.001;
     shadow.scale.setScalar(0.6);
     g.add(shadow);
-    // Per-customer body scale variation — same height range as real people.
+    // Per-customer body proportions — height + width vary independently so
+    // we see tall+thin, short+wide, etc.
     const bodyScale = 0.85 + Math.random() * 0.3;
-    g.scale.setScalar(bodyScale);
+    const heightFactor = 0.92 + Math.random() * 0.18;
+    const widthFactor = 0.9 + Math.random() * 0.2;
+    g.scale.set(bodyScale * widthFactor, bodyScale * heightFactor, bodyScale * widthFactor);
     localLayer.add(g);
     const walkSpeed = 1.2 + Math.random() * 0.6;
     return {
