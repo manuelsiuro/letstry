@@ -135,6 +135,22 @@ export function mountHud(): void {
 
   document.body.appendChild(root);
 
+  // Fade HUD in after the cinematic intro pan finishes. Returning players
+  // (totalEarned > 0) skip the intro so the HUD shows immediately.
+  const st = getState();
+  if ((st.totalEarned ?? 0) > 0) {
+    root.style.opacity = "1";
+  } else {
+    root.style.opacity = "0";
+    root.style.transition = "opacity 0.6s ease-in";
+    // Game-start fires when the player dismisses the menu. The threeScene
+    // intro lasts ~3.2s; wait 2.5s so the HUD pops in just as the camera
+    // is settling into the standard framing.
+    window.addEventListener("game-start", () => {
+      setTimeout(() => { root.style.opacity = "1"; }, 2500);
+    }, { once: true });
+  }
+
   // ---- Wiring ----
   btnMake.addEventListener("click", () => {
     clickMake();

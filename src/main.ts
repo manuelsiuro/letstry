@@ -28,10 +28,13 @@ async function bootstrap(): Promise<void> {
   try { startThreeScene(mount); } catch (e) { console.error("three scene failed", e); }
   try { await startPixiOverlay(mount); } catch (e) { console.error("pixi overlay failed", e); }
   try { await showMenu(); } catch (e) { console.error("menu failed", e); }
-  // Signal to the renderer that the player has dismissed the menu and the
-  // canvas is now visible — the cinematic intro pan listens for this.
-  window.dispatchEvent(new CustomEvent("game-start"));
+  // Mount HUD before dispatching game-start so the HUD's listener can
+  // catch the event and run its fade-in.
   try { mountHud(); } catch (e) { console.error("hud failed", e); }
+  // Signal to the renderer + HUD that the player has dismissed the menu and
+  // the canvas is now visible — the cinematic intro pan and HUD fade-in
+  // both listen for this.
+  window.dispatchEvent(new CustomEvent("game-start"));
   startAutosave();
 }
 
