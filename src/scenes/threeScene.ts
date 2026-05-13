@@ -6,7 +6,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
-import { subscribe, type GameState, type Phase } from "../game/state";
+import { subscribe, getState, type GameState, type Phase } from "../game/state";
 import { advance } from "../game/loop";
 
 export interface ThreeScene {
@@ -1646,6 +1646,23 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // Pizza spin
     pizza.rotation.y = elapsed * 0.4;
     pizza2.rotation.y = -elapsed * 0.4;
+    // Pizza size scales with the current pizzaValue — players SEE their
+    // food upgrades on the counter. Log-based so the disc doesn't blow up
+    // at high tiers. Eased toward target so upgrades feel like a smooth
+    // grow rather than a snap.
+    const pizzaValueNow = getState().pizzaValue;
+    const targetPizzaScale = 1 + Math.log10(Math.max(1, pizzaValueNow)) * 0.18;
+    const newBase = THREE.MathUtils.lerp(
+      (pizza.userData.baseScale as number) ?? 1,
+      targetPizzaScale,
+      Math.min(1, dt * 1.5),
+    );
+    pizza.userData.baseScale = newBase;
+    pizza2.userData.baseScale = newBase;
+    // Apply baseScale every frame; the pulse loop further down will
+    // override with baseScale * pulseMul if a pulse is currently active.
+    pizza.scale.setScalar(newBase);
+    pizza2.scale.setScalar(newBase);
 
     // ---- Upgrade-driven prop animations ----
     // Dough ball: spin + bob
@@ -1707,18 +1724,27 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     }
 
     // ---- Purchase pulse tick ----
+    // Pulses multiply the target's baseScale (userData.baseScale, default 1)
+    // so a target whose base is already > 1 (e.g. the upgrade-grown pizza)
+    // still gets the same relative pop.
     for (let i = pulses.length - 1; i >= 0; i--) {
       const pl = pulses[i];
       const t = (elapsed - pl.startedAt) / PULSE_DURATION;
       if (t >= 1) {
-        for (const target of pl.targets) target.scale.setScalar(1);
+        for (const target of pl.targets) {
+          const base = (target.userData.baseScale as number) ?? 1;
+          target.scale.setScalar(base);
+        }
         pulses.splice(i, 1);
         continue;
       }
       // ease 1 -> 1.4 -> 1 (triangular peak at t=0.5)
       const k = t < 0.5 ? t * 2 : (1 - t) * 2;
-      const scale = 1 + 0.4 * k;
-      for (const target of pl.targets) target.scale.setScalar(scale);
+      const mul = 1 + 0.4 * k;
+      for (const target of pl.targets) {
+        const base = (target.userData.baseScale as number) ?? 1;
+        target.scale.setScalar(base * mul);
+      }
     }
     // ---- Particle puff tick ----
     for (let i = particles.length - 1; i >= 0; i--) {
