@@ -679,6 +679,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // an oven is 1.27m tall, so its top reaches y = GROUND_Y + 1.27 ≈ 0.77 —
   // safely above the counter top (y=0.55) so it's actually visible.
   const OVEN_SCALE = 0.65;
+  // Shared shadow-disc geometry + material for chefs / customers / bikes /
+  // ovens. Hoisted above all factory functions so any of them can attach
+  // one via a single shared geo+mat pair.
+  const shadowGeo = new THREE.CircleGeometry(0.4, 24);
+  const shadowMat = new THREE.MeshBasicMaterial({
+    color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false, fog: false,
+  });
+
   function makeOven(x: number): THREE.Group {
     const g = new THREE.Group();
     g.position.set(x, GROUND_Y, -1.35);
@@ -695,6 +703,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       clone.scale.setScalar(OVEN_SCALE);
       g.add(clone);
     });
+    // Fake shadow under the oven, larger than the chef shadow.
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.001;
+    shadow.scale.setScalar(1.1);
+    g.add(shadow);
     return g;
   }
   const oven1 = makeOven(-1);
@@ -1077,11 +1091,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     (slot.mesh.material as THREE.MeshStandardMaterial).opacity = 1;
   }
 
-  // Shared shadow-disc geometry + material for chefs and customers.
-  const shadowGeo = new THREE.CircleGeometry(0.4, 24);
-  const shadowMat = new THREE.MeshBasicMaterial({
-    color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false, fog: false,
-  });
+  // Shared shadow geometry + material is hoisted above all factories so
+  // any group constructor can attach one.
+  // (declared earlier — block kept here as a comment-only marker.)
 
   function makeChef(x: number, phase: number): Chef {
     const g = new THREE.Group();
