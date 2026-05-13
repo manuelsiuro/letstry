@@ -17,7 +17,7 @@ const FX_ON = new URLSearchParams(window.location.search).get("fx") !== "off";
 
 export function startThreeScene(mount: HTMLElement): ThreeScene {
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x0a0e1a, 12, 40);
+  scene.fog = new THREE.Fog(0x0a0e1a, 18, 60);
   scene.background = new THREE.Color(0x0a0e1a);
 
   const camera = new THREE.PerspectiveCamera(55, mount.clientWidth / mount.clientHeight, 0.1, 200);
@@ -161,12 +161,77 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   scene.add(shopLayer);
 
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(20, 20),
+    new THREE.PlaneGeometry(40, 40),
     new THREE.MeshStandardMaterial({ color: 0x1a1f2e, roughness: 0.95 }),
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = GROUND_Y;
   shopLayer.add(ground);
+
+  // ---- Nighttime city backdrop ----
+  // Procedural row of building silhouettes with random lit windows on a
+  // ring behind the shop. Reads as "you're a pizzeria on a city street"
+  // rather than a void.
+  const cityLayer = new THREE.Group();
+  shopLayer.add(cityLayer);
+  const buildingMat = new THREE.MeshStandardMaterial({ color: 0x18243a, roughness: 0.9 });
+  // Windows are emissive so they punch through the fog at distance and read
+  // as actual lit city windows.
+  const windowGeo = new THREE.PlaneGeometry(0.3, 0.3);
+  const windowMatLit = new THREE.MeshStandardMaterial({
+    color: 0xffe6a0, emissive: 0xffd86a, emissiveIntensity: 1.6, fog: false,
+    side: THREE.DoubleSide,
+  });
+  const windowMatDim = new THREE.MeshStandardMaterial({
+    color: 0x4a5a8a, emissive: 0x4a5a8a, emissiveIntensity: 0.4, fog: false,
+    side: THREE.DoubleSide,
+  });
+  const buildingCount = 22;
+  const ringRadius = 13;
+  for (let i = 0; i < buildingCount; i++) {
+    const a = (i / buildingCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.1;
+    // Skip the slice directly in front of the camera (z>+ direction) so the
+    // city forms a backdrop on three sides without blocking the foreground.
+    if (Math.sin(a) > 0.6) continue;
+    const cx = Math.cos(a) * ringRadius;
+    const cz = Math.sin(a) * ringRadius;
+    const width = 2.2 + Math.random() * 2.5;
+    const height = 4 + Math.random() * 6;
+    const depth = 1.5 + Math.random() * 1.5;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), buildingMat);
+    // Face the center: rotate around Y so the long face looks inward
+    b.rotation.y = -a + Math.PI / 2;
+    b.position.set(cx, GROUND_Y + height / 2, cz);
+    cityLayer.add(b);
+    // Sprinkle lit windows on the inward-facing side
+    const colStep = 0.5;
+    const rowStep = 0.5;
+    const cols = Math.max(2, Math.floor(width / colStep));
+    const rows = Math.max(3, Math.floor(height / rowStep));
+    for (let c = 0; c < cols; c++) {
+      for (let r = 1; r < rows - 1; r++) {
+        if (Math.random() > 0.55) continue;
+        const lit = Math.random() > 0.3;
+        const w = new THREE.Mesh(windowGeo, lit ? windowMatLit : windowMatDim);
+        const localX = (c + 0.5) * colStep - width / 2;
+        const localY = (r + 0.5) * rowStep - height / 2;
+        // Inward-facing side. The building's rotation maps local -Z toward
+        // scene center; windows sit there so they face the camera.
+        w.position.set(localX, localY, -depth / 2 - 0.02);
+        w.rotation.y = Math.PI; // flip so the lit side points outward
+        b.add(w);
+      }
+    }
+    // Optional rooftop "antenna" or sign for variety
+    if (Math.random() < 0.3) {
+      const antenna = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.04, 1.2, 6),
+        buildingMat,
+      );
+      antenna.position.set(0, height / 2 + 0.6, 0);
+      b.add(antenna);
+    }
+  }
 
   // Counter: shorter than before so the chef behind it remains visible from
   // the front camera. Spans y = GROUND_Y .. GROUND_Y + 0.85 (top at -0.05),
