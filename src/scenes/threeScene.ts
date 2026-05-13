@@ -1700,6 +1700,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     facing: number;
     headFacing: number;
     walkPhase: number;
+    walkSpeed: number;
   };
 
   // Discrete queue slots in front of the counter — keeps customers lined up
@@ -1747,11 +1748,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       bestC.queuePos.copy(newPos);
       bestC.state = "arriving";
       bestC.stateTime = 0;
-      bestC.travelTime = Math.max(0.3, bestC.spawnPos.distanceTo(newPos) / CUSTOMER_SPEED);
+      bestC.travelTime = Math.max(0.3, bestC.spawnPos.distanceTo(newPos) / bestC.walkSpeed);
     }
   }
   const customers: Customer[] = [];
-  const CUSTOMER_SPEED = 1.4; // m/s
+  // Customer walk speed is now per-customer (Customer.walkSpeed in
+  // ~[1.2, 1.8] m/s). 1.4 m/s is the population mean.
 
   // Shared geos for customers — similar shapes to chef but different
   // proportions so they don't look identical.
@@ -1892,6 +1894,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const bodyScale = 0.85 + Math.random() * 0.3;
     g.scale.setScalar(bodyScale);
     localLayer.add(g);
+    const walkSpeed = 1.2 + Math.random() * 0.6;
     return {
       group: g,
       legL, legR, armL, armR, head,
@@ -1903,9 +1906,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       queuePos,
       exitPos,
       headFacing: 0,
-      travelTime: spawnPos.distanceTo(queuePos) / CUSTOMER_SPEED,
+      travelTime: spawnPos.distanceTo(queuePos) / walkSpeed,
       facing: 0,
       walkPhase: Math.random() * Math.PI * 2,
+      walkSpeed,
     };
   }
 
@@ -3672,7 +3676,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             c.exitPos.set(side * (6 + Math.random() * 2), GROUND_Y, 3.2 + Math.random() * 1);
             c.state = "leaving";
             c.stateTime = 0;
-            c.travelTime = Math.max(0.5, c.queuePos.distanceTo(c.exitPos) / CUSTOMER_SPEED);
+            c.travelTime = Math.max(0.5, c.queuePos.distanceTo(c.exitPos) / c.walkSpeed);
             // Got their pizza — hand them the box, and pop it briefly.
             c.pizzaBox.visible = true;
             c.group.userData.boxPulseStart = elapsed;
@@ -3708,7 +3712,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
             // Reclaim a queue slot for this visit.
             c.queueSlot = claimQueueSlot();
             if (c.queueSlot >= 0) c.queuePos.copy(queueSlotPos(c.queueSlot));
-            c.travelTime = Math.max(0.5, c.spawnPos.distanceTo(c.queuePos) / CUSTOMER_SPEED);
+            c.travelTime = Math.max(0.5, c.spawnPos.distanceTo(c.queuePos) / c.walkSpeed);
           }
           break;
         }
