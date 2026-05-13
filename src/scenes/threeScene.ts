@@ -2099,6 +2099,39 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     });
   }
 
+  // ---- Orbiting OMEGA TOPPING text label ----
+  // A sprite text label that orbits the pizza-sun on a wider, slower orbit
+  // than the moons. Always camera-facing thanks to Sprite.
+  const omegaTextTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 512; cv.height = 128;
+    const ctx = cv.getContext("2d")!;
+    ctx.fillStyle = "rgba(0,0,0,0)";
+    ctx.fillRect(0, 0, 512, 128);
+    ctx.font = "bold 64px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#ff8844";
+    ctx.shadowBlur = 24;
+    ctx.fillStyle = "#fff4a0";
+    ctx.fillText("OMEGA TOPPING!", 256, 64);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "#ff5522";
+    ctx.lineWidth = 3;
+    ctx.strokeText("OMEGA TOPPING!", 256, 64);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const omegaSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: omegaTextTex,
+    transparent: true,
+    depthWrite: false,
+  }));
+  omegaSprite.scale.set(3.2, 0.8, 1);
+  finalLayer.add(omegaSprite);
+  const omegaOrbit = { angle: 0, radius: 4.5, speed: 0.25, tilt: 0.5 };
+
   // ---- Camera positions per phase ----
   const camTargets: Record<Phase, { pos: THREE.Vector3; look: THREE.Vector3 }> = {
     shop:       { pos: new THREE.Vector3(0, 2.8, 4.2),  look: new THREE.Vector3(0, 0.1, -1.0) },
@@ -3216,6 +3249,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       // axis so toppings parade past as it rotates.
       pizzaSun.rotation.z = elapsed * 0.2;
       sunGlow.intensity = 3 + Math.sin(elapsed * 2) * 0.6;
+      // OMEGA TOPPING text orbits the sun on a wider tilted ring.
+      omegaOrbit.angle += dt * omegaOrbit.speed;
+      const oa = omegaOrbit.angle;
+      omegaSprite.position.set(
+        Math.cos(oa) * omegaOrbit.radius,
+        Math.sin(oa) * omegaOrbit.radius * omegaOrbit.tilt,
+        Math.sin(oa * 0.7) * 1.5,
+      );
       // Pizza moons orbit the sun + spin individually.
       for (const m of pizzaMoons) {
         m.angle += dt * m.speed;
