@@ -785,6 +785,39 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     marketingStars.push(s);
   }
 
+  // Glitter trail — pool of small sprites that spawn at marketing star
+  // positions and drift downward, fading out. Visible only when marketing
+  // upgrade is owned (= marketingGroup.visible).
+  type Glitter = { sprite: THREE.Sprite; vel: THREE.Vector3; life: number; maxLife: number; active: boolean };
+  const GLITTER_POOL = 24;
+  const glitter: Glitter[] = [];
+  const glitterTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 32; cv.height = 32;
+    const ctx = cv.getContext("2d")!;
+    const g = ctx.createRadialGradient(16, 16, 1, 16, 16, 14);
+    g.addColorStop(0, "rgba(255,255,200,1)");
+    g.addColorStop(0.5, "rgba(255,220,100,0.7)");
+    g.addColorStop(1, "rgba(255,200,80,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 32, 32);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  for (let i = 0; i < GLITTER_POOL; i++) {
+    const mat = new THREE.SpriteMaterial({
+      map: glitterTex, transparent: true, opacity: 0,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const sp = new THREE.Sprite(mat);
+    sp.scale.setScalar(0.15);
+    sp.visible = false;
+    shopLayer.add(sp);
+    glitter.push({ sprite: sp, vel: new THREE.Vector3(), life: 0, maxLife: 1, active: false });
+  }
+  let nextGlitterAt = 0;
+
   // Per-oven dynamic props (flame, smoke, bot-arm) — maintained alongside `ovens[]`
   const flameMat = new THREE.MeshStandardMaterial({ color: 0xff7722, emissive: 0xff4400, emissiveIntensity: 1.2, roughness: 0.3 });
   const smokeMat = new THREE.MeshStandardMaterial({ color: 0x888888, transparent: true, opacity: 0.5, roughness: 1 });
@@ -2160,6 +2193,44 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         s.rotation.y += dt * 2;
       }
       marketingGroup.position.z = 0.3 + Math.sin(elapsed * 0.6) * 0.1;
+      // Spawn glitter at a random star ~6 times/sec.
+      if (elapsed >= nextGlitterAt) {
+        const free = glitter.find((g) => !g.active);
+        if (free) {
+          const star = marketingStars[Math.floor(Math.random() * marketingStars.length)];
+          // World position of the star
+          const worldPos = new THREE.Vector3();
+          star.getWorldPosition(worldPos);
+          free.sprite.position.copy(worldPos);
+          free.vel.set(
+            (Math.random() - 0.5) * 0.3,
+            -0.4 - Math.random() * 0.3,
+            (Math.random() - 0.5) * 0.3,
+          );
+          free.life = 0;
+          free.maxLife = 0.9 + Math.random() * 0.5;
+          free.active = true;
+          free.sprite.visible = true;
+          free.sprite.scale.setScalar(0.12 + Math.random() * 0.06);
+        }
+        nextGlitterAt = elapsed + 0.12 + Math.random() * 0.1;
+      }
+    }
+    // Tick active glitter regardless of marketingGroup.visible — they need
+    // to finish their lifetime even if the upgrade got toggled off.
+    for (const gl of glitter) {
+      if (!gl.active) continue;
+      gl.life += dt;
+      const t = gl.life / gl.maxLife;
+      if (t >= 1) {
+        gl.active = false;
+        gl.sprite.visible = false;
+        continue;
+      }
+      gl.sprite.position.x += gl.vel.x * dt;
+      gl.sprite.position.y += gl.vel.y * dt;
+      gl.sprite.position.z += gl.vel.z * dt;
+      gl.sprite.material.opacity = (1 - t);
     }
 
     // ---- Purchase pulse tick ----
