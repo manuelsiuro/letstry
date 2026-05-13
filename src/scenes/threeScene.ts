@@ -1010,6 +1010,22 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     clone.scale.setScalar(1.4);
     earth.add(clone);
   });
+  // Atmosphere halo — a slightly larger sphere with back-side rendering and
+  // additive blend. From the camera you see only the silhouette rim, which
+  // reads as an atmospheric glow around the planet.
+  const earthHalo = new THREE.Mesh(
+    new THREE.SphereGeometry(1.95, 28, 20),
+    new THREE.MeshBasicMaterial({
+      color: 0x5cb0ff,
+      transparent: true,
+      opacity: 0.12,
+      blending: THREE.AdditiveBlending,
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false,
+    }),
+  );
+  earth.add(earthHalo);
 
   const planets: THREE.Mesh[] = [];
   function makePlanet(color: number, radius: number, distance: number, speed: number): THREE.Mesh {
