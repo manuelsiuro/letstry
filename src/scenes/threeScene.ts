@@ -377,7 +377,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   ];
   for (const [sx, sz] of streetlightSpots) {
     const lamp = new THREE.Group();
-    const poleH = 3.2;
+    const poleH = 2.9 + Math.random() * 0.6;
     const pole = new THREE.Mesh(
       new THREE.CylinderGeometry(0.05, 0.05, poleH, 8),
       poleMat,
