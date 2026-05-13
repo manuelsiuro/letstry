@@ -1376,7 +1376,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const puffTex = makePuffTexture();
   const coinTex = makeCoinTexture();
 
-  function spawnParticle(flavor: "make" | "sell"): void {
+  function spawnParticle(flavor: "make" | "sell", origin?: THREE.Vector3): void {
     if (particles.length >= PARTICLE_POOL_SIZE) return;
     const isMake = flavor === "make";
     const mat = new THREE.SpriteMaterial({
@@ -1389,10 +1389,13 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const sprite = new THREE.Sprite(mat);
     sprite.scale.setScalar(isMake ? 0.6 : 0.5);
     const spread = isMake ? 0.45 : 0.6;
+    const ox = origin ? origin.x : 0;
+    const oy = origin ? origin.y : counterTopY + 0.3;
+    const oz = origin ? origin.z : 0;
     sprite.position.set(
-      (Math.random() - 0.5) * spread,
-      counterTopY + 0.3,
-      (Math.random() - 0.5) * spread * 0.6,
+      ox + (Math.random() - 0.5) * spread,
+      oy,
+      oz + (Math.random() - 0.5) * spread * 0.6,
     );
     const vy = isMake ? 0.5 + Math.random() * 0.3 : 1.1 + Math.random() * 0.3;
     const vx = (Math.random() - 0.5) * 0.3;
@@ -1702,6 +1705,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
           if (k >= 1) {
             b.state = "idle";
             b.stateTime = 0;
+            // Coin shower — visual signature of the income from this run.
+            const coinOrigin = new THREE.Vector3(b.pos.x, b.pos.y + 0.4, b.pos.z);
+            for (let n = 0; n < 3; n++) spawnParticle("sell", coinOrigin);
           }
           break;
         }
