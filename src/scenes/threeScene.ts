@@ -754,6 +754,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     legR: THREE.Mesh;
     armL: THREE.Mesh;
     armR: THREE.Mesh;
+    head: THREE.Group;
     pizzaBox: THREE.Group;
     state: CustomerState;
     stateTime: number;
@@ -762,6 +763,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     exitPos: THREE.Vector3;
     travelTime: number;
     facing: number;
+    headFacing: number;
     walkPhase: number;
   };
   const customers: Customer[] = [];
@@ -803,13 +805,16 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const body = new THREE.Mesh(custBodyGeo, matShirt);
     body.position.y = 0.5;
     g.add(body);
-    // Head + hat
-    const head = new THREE.Mesh(custHeadGeo, matSkinC);
+    // Head + hat — grouped so they rotate together when the customer
+    // "looks around" while waiting at the counter.
+    const head = new THREE.Group();
     head.position.y = 1.15;
     g.add(head);
+    const headMesh = new THREE.Mesh(custHeadGeo, matSkinC);
+    head.add(headMesh);
     const hat = new THREE.Mesh(custHatGeo, matHat);
-    hat.position.y = 1.28;
-    g.add(hat);
+    hat.position.y = 0.13;
+    head.add(hat);
     // Arms — shoulder pivot
     const armL = new THREE.Mesh(custArmGeo, matShirt);
     armL.position.set(-0.2, 0.95, 0);
@@ -845,13 +850,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     localLayer.add(g);
     return {
       group: g,
-      legL, legR, armL, armR,
+      legL, legR, armL, armR, head,
       pizzaBox,
       state: "arriving",
       stateTime: 0,
       spawnPos,
       queuePos,
       exitPos,
+      headFacing: 0,
       travelTime: spawnPos.distanceTo(queuePos) / CUSTOMER_SPEED,
       facing: 0,
       walkPhase: Math.random() * Math.PI * 2,
@@ -1813,6 +1819,30 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         c.armL.rotation.x = -0.2;
         c.armR.rotation.x = -0.2;
       }
+      // Head turn: while waiting, look toward the chef (slightly off-center
+      // so people don't all stare at the same spot). Otherwise look straight
+      // ahead. The head rotation is in LOCAL space (relative to body facing).
+      let targetHead = 0;
+      if (c.state === "waiting") {
+        // Compute angle from customer position to chef (z=-0.85, x=0..1) in
+        // world space, then subtract the body's facing so the head turn is
+        // relative.
+        const chefX = 0.5;
+        const chefZ = -0.85;
+        const worldAngle = Math.atan2(chefX - c.group.position.x, chefZ - c.group.position.z);
+        let delta = worldAngle - c.facing;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        // Clamp so the head doesn't snap-spin past the shoulders
+        delta = Math.max(-1.0, Math.min(1.0, delta));
+        // Small idle sway so they don't look like statues
+        targetHead = delta + Math.sin(elapsed * 0.7 + c.walkPhase) * 0.12;
+      }
+      let hDiff = targetHead - c.headFacing;
+      while (hDiff > Math.PI) hDiff -= Math.PI * 2;
+      while (hDiff < -Math.PI) hDiff += Math.PI * 2;
+      c.headFacing += hDiff * Math.min(1, dt * 5);
+      c.head.rotation.y = c.headFacing;
     }
 
     // Cosmic
