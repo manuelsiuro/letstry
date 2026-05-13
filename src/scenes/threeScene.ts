@@ -571,6 +571,32 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   counter.position.set(0, GROUND_Y + 0.425, 0);
   shopLayer.add(counter);
 
+  // Painted "EST. ★ 2026" stencil on the counter front.
+  const estTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 512; cv.height = 128;
+    const ctx = cv.getContext("2d")!;
+    ctx.clearRect(0, 0, 512, 128);
+    ctx.font = "italic bold 64px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#f5d76e";
+    ctx.shadowColor = "#a06800";
+    ctx.shadowBlur = 4;
+    ctx.fillText("EST. ★ 2026", 256, 64);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  })();
+  const estDecal = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.3, 0.32),
+    new THREE.MeshBasicMaterial({ map: estTex, transparent: true, fog: false }),
+  );
+  // Counter front is at z = +0.6 (counter depth 1.2, centered at z=0)
+  // — park the decal just in front of it.
+  estDecal.position.set(0, GROUND_Y + 0.18, 0.601);
+  shopLayer.add(estDecal);
+
   const counterTopY = GROUND_Y + 0.85 + 0.04; // 0.39
   const counterTop = new THREE.Mesh(
     new THREE.BoxGeometry(3.5, 0.08, 1.3),
