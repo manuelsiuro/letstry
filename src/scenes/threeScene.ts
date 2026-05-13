@@ -3229,6 +3229,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       // Bot arm joints share the same line — match the flicker on their
       // cyan emissive intensity.
       botArmJointMat.emissiveIntensity = 1.4 + Math.sin(elapsed * 7.3) * 0.15 + Math.sin(elapsed * 19) * 0.1;
+      // OPEN sign also rides the same flicker — dip its plane opacity.
+      const openFlicker = 0.96 + Math.sin(elapsed * 7.3) * 0.04 + Math.sin(elapsed * 19) * 0.03;
+      (openSignMesh.material as THREE.MeshBasicMaterial).opacity = openFlicker;
+      (openSignBack.material as THREE.MeshBasicMaterial).opacity = openFlicker;
+      (openSignMesh.material as THREE.MeshBasicMaterial).transparent = true;
+      (openSignBack.material as THREE.MeshBasicMaterial).transparent = true;
       // Counter pizza steam — same loop pattern as oven steam.
       for (const st of counterSteamSprites) {
         const t = ((elapsed * 0.4 + st.offset) % 1);
