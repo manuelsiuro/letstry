@@ -2680,6 +2680,18 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   };
   window.addEventListener("resize", onResize);
 
+  // Mouse parallax — normalized -1..1 across the canvas width. Eased so the
+  // camera doesn't snap when the cursor jumps.
+  let mouseNX = 0;
+  let mouseNY = 0;
+  let parallaxNX = 0;
+  let parallaxNY = 0;
+  window.addEventListener("pointermove", (e) => {
+    const rect = mount.getBoundingClientRect();
+    mouseNX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouseNY = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+  });
+
   // ---- Animation loop ----
   const clock = new THREE.Clock();
   let elapsed = 0;
@@ -2759,6 +2771,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     camera.position.copy(camPos);
     camera.position.x += Math.sin(elapsed * 0.4) * drift;
     camera.position.y += Math.cos(elapsed * 0.3) * drift * 0.5;
+    // Mouse parallax — only in shop/local phases (gameplay), eased toward
+    // the latest pointer position so the camera doesn't snap.
+    if ((currentPhase === "shop" || currentPhase === "local") && !intro) {
+      parallaxNX = THREE.MathUtils.lerp(parallaxNX, mouseNX, Math.min(1, dt * 3));
+      parallaxNY = THREE.MathUtils.lerp(parallaxNY, mouseNY, Math.min(1, dt * 3));
+      camera.position.x += parallaxNX * 0.35;
+      camera.position.y -= parallaxNY * 0.2;
+    }
     // Final phase: zoom-in/out breathing. Move the camera toward / away
     // from camLook on a slow sine, so the pizza-sun feels alive.
     if (currentPhase === "final") {
