@@ -2212,10 +2212,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   type Ghost = THREE.Group & { userData: { angle: number; radius: number; speed: number; tint: number } };
   const ghosts: Ghost[] = [];
   const ghostTints = [0xff66cc, 0x66ccff];
+  const ghostScales = [0.75, 1.05];
   for (let i = 0; i < ghostTints.length; i++) {
     const g = new THREE.Group() as Ghost;
     onModelReady("planet", (clone) => {
-      clone.scale.setScalar(0.9);
+      clone.scale.setScalar(ghostScales[i]);
       clone.traverse((n) => {
         const m = (n as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
         if (m && (m as { color?: unknown }).color) {
