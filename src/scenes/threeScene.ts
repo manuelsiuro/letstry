@@ -1,10 +1,19 @@
 import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { subscribe, type GameState, type Phase } from "../game/state";
 import { advance } from "../game/loop";
 
 export interface ThreeScene {
   canvas: HTMLCanvasElement;
 }
+
+const FX_ON = new URLSearchParams(window.location.search).get("fx") !== "off";
 
 export function startThreeScene(mount: HTMLElement): ThreeScene {
   const scene = new THREE.Scene();
@@ -15,10 +24,110 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(mount.clientWidth, mount.clientHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
   renderer.domElement.style.display = "block";
   renderer.domElement.style.position = "absolute";
   renderer.domElement.style.inset = "0";
   mount.appendChild(renderer.domElement);
+
+  // ---- Post-processing (gated by ?fx) ----
+  let composer: EffectComposer | null = null;
+  let bloomPass: UnrealBloomPass | null = null;
+  if (FX_ON) {
+    composer = new EffectComposer(renderer);
+    composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    composer.setSize(mount.clientWidth, mount.clientHeight);
+    composer.addPass(new RenderPass(scene, camera));
+    bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(mount.clientWidth, mount.clientHeight),
+      0.45, // strength
+      0.7,  // radius
+      0.85, // threshold
+    );
+    composer.addPass(bloomPass);
+    composer.addPass(new OutputPass());
+  }
+
+  // ---- Optional asset preload (HDRI + GLBs). HEAD-probe first so missing
+  // files don't make the dev server return index.html and crash the loaders.
+  async function fileExists(url: string): Promise<boolean> {
+    try {
+      const r = await fetch(url, { method: "HEAD" });
+      if (!r.ok) return false;
+      const ct = r.headers.get("content-type") ?? "";
+      // Vite's SPA fallback serves text/html for missing assets — reject that.
+      return !ct.includes("text/html");
+    } catch {
+      return false;
+    }
+  }
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  pmrem.compileEquirectangularShader();
+  const models: Record<string, THREE.Group> = {};
+
+  (async () => {
+    const hdrUrl = "/assets/env/studio.hdr";
+    if (await fileExists(hdrUrl)) {
+      new RGBELoader().load(
+        hdrUrl,
+        (tex) => {
+          try {
+            const env = pmrem.fromEquirectangular(tex).texture;
+            scene.environment = env;
+            tex.dispose();
+          } catch {
+            // ignore — environment is optional
+          }
+        },
+        undefined,
+        () => { /* ignore */ },
+      );
+    }
+
+    const modelSlots: Array<[string, string]> = [
+      ["pizza", "/assets/models/pizza.glb"],
+      ["oven", "/assets/models/oven.glb"],
+      ["bike", "/assets/models/bike.glb"],
+      ["drone", "/assets/models/drone.glb"],
+      ["planet", "/assets/models/planet.glb"],
+      ["wormhole", "/assets/models/wormhole.glb"],
+    ];
+    const present = await Promise.all(modelSlots.map(([, u]) => fileExists(u)));
+    if (present.some(Boolean)) {
+      const draco = new DRACOLoader();
+      draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
+      const gltf = new GLTFLoader();
+      gltf.setDRACOLoader(draco);
+      for (let i = 0; i < modelSlots.length; i++) {
+        if (!present[i]) continue;
+        const [name, url] = modelSlots[i];
+        gltf.load(
+          url,
+          (g) => {
+            models[name] = g.scene;
+            const pending = swapQueue[name];
+            if (pending) {
+              for (const cb of pending) cb(g.scene.clone(true));
+              delete swapQueue[name];
+            }
+          },
+          undefined,
+          () => { /* ignore */ },
+        );
+      }
+    }
+  })();
+
+  // GLB swap mechanism: register a callback that fires with a fresh clone once
+  // the named model has loaded (or immediately if it's already in memory).
+  const swapQueue: Record<string, ((clone: THREE.Group) => void)[]> = {};
+  function onModelReady(name: string, cb: (clone: THREE.Group) => void): void {
+    if (models[name]) cb(models[name].clone(true));
+    else (swapQueue[name] ??= []).push(cb);
+  }
 
   // ---- Lights ----
   const key = new THREE.DirectionalLight(0xffe7b8, 1.6);
@@ -55,14 +164,23 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   counterTop.position.set(0, 0.55, 0);
   shopLayer.add(counterTop);
 
-  const ovens: THREE.Mesh[] = [];
-  function makeOven(x: number): THREE.Mesh {
-    const oven = new THREE.Mesh(
+  const ovens: THREE.Group[] = [];
+  function makeOven(x: number): THREE.Group {
+    const g = new THREE.Group();
+    g.position.set(x, 0, -1.2);
+    const placeholder = new THREE.Mesh(
       new THREE.BoxGeometry(0.9, 0.9, 0.9),
       new THREE.MeshStandardMaterial({ color: 0x664433, roughness: 0.7, emissive: 0xff5500, emissiveIntensity: 0.4 }),
     );
-    oven.position.set(x, 0, -1.2);
-    return oven;
+    g.add(placeholder);
+    onModelReady("oven", (clone) => {
+      g.remove(placeholder);
+      placeholder.geometry.dispose();
+      (placeholder.material as THREE.Material).dispose();
+      clone.scale.setScalar(0.45);
+      g.add(clone);
+    });
+    return g;
   }
   const oven1 = makeOven(-1);
   shopLayer.add(oven1);
@@ -95,13 +213,21 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   sign.position.set(0, 2.2, 0.62);
   shopLayer.add(sign);
 
-  // Pizza disc on counter
-  const pizza = new THREE.Mesh(
+  // Pizza disc on counter — placeholder until pizza.glb loads
+  const pizza = new THREE.Group();
+  pizza.position.set(0, 0.62, 0);
+  shopLayer.add(pizza);
+  const pizzaPlaceholder = new THREE.Mesh(
     new THREE.CylinderGeometry(0.45, 0.45, 0.06, 24),
     new THREE.MeshStandardMaterial({ color: 0xf2c46d, roughness: 0.5, emissive: 0x331100, emissiveIntensity: 0.15 }),
   );
-  pizza.position.set(0, 0.62, 0);
-  shopLayer.add(pizza);
+  pizza.add(pizzaPlaceholder);
+  onModelReady("pizza", (clone) => {
+    pizza.remove(pizzaPlaceholder);
+    pizzaPlaceholder.geometry.dispose();
+    clone.scale.setScalar(0.45);
+    pizza.add(clone);
+  });
 
   // ---- Kitchen decor ----
   // Shared materials (reuse where colors repeat)
@@ -110,45 +236,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const matWood = new THREE.MeshStandardMaterial({ color: 0x664433, roughness: 0.8 });
   const matRed = new THREE.MeshStandardMaterial({ color: 0xe04848, roughness: 0.5 });
   const matCream = new THREE.MeshStandardMaterial({ color: 0xf5e6c8, roughness: 0.6 });
-  const matBasil = new THREE.MeshStandardMaterial({ color: 0x3a8a3a, roughness: 0.8 });
   const matCheese = new THREE.MeshStandardMaterial({ color: 0xfff3b0, roughness: 0.5, emissive: 0x664400, emissiveIntensity: 0.1 });
   const matOlive = new THREE.MeshStandardMaterial({ color: 0x6b8e3d, roughness: 0.5 });
   const matGold = new THREE.MeshStandardMaterial({ color: 0xd4a04a, roughness: 0.4 });
   const matDark = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.6 });
 
-  // Pizza toppings group (parented to pizza so it spins with it)
-  const toppings = new THREE.Group();
-  pizza.add(toppings);
-  const pepGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.02, 10);
-  const pepperoniPositions = [
-    [0.18, 0, 0.0], [-0.2, 0, 0.05], [0.05, 0, 0.22],
-    [-0.08, 0, -0.2], [0.22, 0, -0.18], [-0.22, 0, -0.05],
-  ];
-  for (const [x, , z] of pepperoniPositions) {
-    const p = new THREE.Mesh(pepGeo, matRed);
-    p.position.set(x, 0.04, z);
-    toppings.add(p);
-  }
-  const basilGeo = new THREE.BoxGeometry(0.07, 0.005, 0.05);
-  const basilPositions = [
-    [0.0, 0, 0.08], [-0.12, 0, 0.18], [0.15, 0, -0.08], [-0.05, 0, -0.15],
-  ];
-  for (const [x, , z] of basilPositions) {
-    const b = new THREE.Mesh(basilGeo, matBasil);
-    b.position.set(x, 0.045, z);
-    b.rotation.y = Math.random() * Math.PI;
-    toppings.add(b);
-  }
-  const cheeseGeo = new THREE.BoxGeometry(0.04, 0.015, 0.04);
-  const cheesePositions = [
-    [0.1, 0, 0.12], [-0.15, 0, -0.1], [0.08, 0, -0.05],
-    [-0.02, 0, 0.0], [0.25, 0, 0.08],
-  ];
-  for (const [x, , z] of cheesePositions) {
-    const c = new THREE.Mesh(cheeseGeo, matCheese);
-    c.position.set(x, 0.04, z);
-    toppings.add(c);
-  }
+  // (Toppings are baked into pizza.glb — no inline mesh needed.)
 
   // Chef factory — low-poly humanoid
   // Shared geometries (built once, pivot-translated for shoulder rotation)
@@ -260,24 +353,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   // Pivot forearm from its TOP (elbow) so rotation pivots at the elbow
   armForearmGeo.translate(0, -0.09, 0);
 
-  // Bike shared geometries
-  const bikeWheelGeo = new THREE.TorusGeometry(0.16, 0.04, 6, 16);
-  const bikeFrameGeo = new THREE.BoxGeometry(0.05, 0.18, 0.5);
-  const bikeBarGeo = new THREE.BoxGeometry(0.22, 0.04, 0.04);
-  const bikeSeatGeo = new THREE.BoxGeometry(0.1, 0.04, 0.12);
-  const bikeBoxGeo = new THREE.BoxGeometry(0.18, 0.06, 0.18);
-
-  // Drone shared geometries
-  const droneBodyGeo = new THREE.BoxGeometry(0.12, 0.05, 0.12);
-  const droneArmGeo = new THREE.BoxGeometry(0.32, 0.02, 0.02);
-  const droneRotorGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.01, 8);
-  const dronePayloadGeo = new THREE.BoxGeometry(0.08, 0.04, 0.08);
-
-  // New shared materials
-  const matBlack = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.7 });
-  const matBike = new THREE.MeshStandardMaterial({ color: 0x4cc9f0, emissive: 0x224488, emissiveIntensity: 0.3, roughness: 0.5 });
-  const matDroneBody = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, emissive: 0x4cc9f0, emissiveIntensity: 0.25, roughness: 0.6 });
-  const matRotor = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, emissive: 0x4cc9f0, emissiveIntensity: 0.4, roughness: 0.5 });
+  // (Bike + drone geometry/materials live inside their GLBs.)
 
   // dough ball — hovers in front of chef, visible when `dough` owned
   const doughBall = new THREE.Mesh(doughGeo, matCream);
@@ -292,13 +368,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   shopLayer.add(cheeseWheel);
 
   // second pizza disc — visible when `kitchen` owned; sits next to existing one
-  const pizza2 = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.45, 0.45, 0.06, 24),
-    new THREE.MeshStandardMaterial({ color: 0xf2c46d, roughness: 0.5, emissive: 0x331100, emissiveIntensity: 0.15 }),
-  );
+  const pizza2 = new THREE.Group();
   pizza2.position.set(0.95, 0.62, 0);
   pizza2.visible = false;
   shopLayer.add(pizza2);
+  onModelReady("pizza", (clone) => {
+    clone.scale.setScalar(0.45);
+    pizza2.add(clone);
+  });
 
   // marketing star fountain — 8 orbiting stars above the sign
   const marketingGroup = new THREE.Group();
@@ -324,7 +401,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   type SmokePuff = { mesh: THREE.Mesh; offset: number };
   type OvenProps = { flame: THREE.Mesh; smoke: SmokePuff[]; arm: THREE.Group };
   const ovenProps: OvenProps[] = [];
-  function makeOvenProps(oven: THREE.Mesh): OvenProps {
+  function makeOvenProps(oven: THREE.Group): OvenProps {
     const flame = new THREE.Mesh(flameGeo, flameMat);
     flame.position.set(oven.position.x, oven.position.y + 0.05, oven.position.z + 0.35);
     flame.visible = false;
@@ -389,31 +466,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   const bikes: THREE.Group[] = [];
   function spawnBike(): void {
     const bike = new THREE.Group();
-    // Wheels — torus in XY plane so the disc faces sideways (perpendicular to bike's z-forward)
-    const wheelFront = new THREE.Mesh(bikeWheelGeo, matBlack);
-    wheelFront.rotation.y = Math.PI / 2;
-    wheelFront.position.set(0, 0.16, 0.25);
-    bike.add(wheelFront);
-    const wheelBack = new THREE.Mesh(bikeWheelGeo, matBlack);
-    wheelBack.rotation.y = Math.PI / 2;
-    wheelBack.position.set(0, 0.16, -0.25);
-    bike.add(wheelBack);
-    // Frame between wheels
-    const frame = new THREE.Mesh(bikeFrameGeo, matBike);
-    frame.position.set(0, 0.16, 0);
-    bike.add(frame);
-    // Handlebar near front
-    const handle = new THREE.Mesh(bikeBarGeo, matDark);
-    handle.position.set(0, 0.3, 0.22);
-    bike.add(handle);
-    // Seat at back top
-    const seat = new THREE.Mesh(bikeSeatGeo, matDark);
-    seat.position.set(0, 0.3, -0.2);
-    bike.add(seat);
-    // Pizza box on back rack
-    const pizzaBox = new THREE.Mesh(bikeBoxGeo, matRed);
-    pizzaBox.position.set(0, 0.27, -0.25);
-    bike.add(pizzaBox);
+    onModelReady("bike", (clone) => {
+      clone.scale.setScalar(0.5);
+      // Bike GLB is modelled +Y-forward; the orbit code rotates bike.rotation.y
+      // around its own up axis, so no extra base rotation is needed.
+      bike.add(clone);
+    });
     localLayer.add(bike);
     bikes.push(bike);
   }
@@ -423,12 +481,21 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   cosmicLayer.visible = false;
   scene.add(cosmicLayer);
 
-  const earth = new THREE.Mesh(
+  const earth = new THREE.Group();
+  earth.position.set(0, 0.4, 0);
+  cosmicLayer.add(earth);
+  const earthPlaceholder = new THREE.Mesh(
     new THREE.SphereGeometry(1.4, 32, 24),
     new THREE.MeshStandardMaterial({ color: 0x3a7bd5, roughness: 0.7, emissive: 0x113355, emissiveIntensity: 0.25 }),
   );
-  earth.position.set(0, 0.4, 0);
-  cosmicLayer.add(earth);
+  earth.add(earthPlaceholder);
+  onModelReady("planet", (clone) => {
+    earth.remove(earthPlaceholder);
+    earthPlaceholder.geometry.dispose();
+    (earthPlaceholder.material as THREE.Material).dispose();
+    clone.scale.setScalar(1.4);
+    earth.add(clone);
+  });
 
   const planets: THREE.Mesh[] = [];
   function makePlanet(color: number, radius: number, distance: number, speed: number): THREE.Mesh {
@@ -466,37 +533,28 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   );
   cosmicLayer.add(stars);
 
-  type Drone = THREE.Group & { userData: { angle: number; radius: number; speed: number; tilt: number; rotors: THREE.Mesh[] } };
+  // Wormhole — drifts behind Earth during cosmic+ phases
+  const wormhole = new THREE.Group();
+  wormhole.position.set(-6, 1.5, -4);
+  wormhole.rotation.set(0.2, -0.4, 0.1);
+  cosmicLayer.add(wormhole);
+  onModelReady("wormhole", (clone) => {
+    clone.scale.setScalar(0.9);
+    wormhole.add(clone);
+  });
+
+  type Drone = THREE.Group & { userData: { angle: number; radius: number; speed: number; tilt: number } };
   const drones: Drone[] = [];
   function spawnDrone(): void {
     const d = new THREE.Group() as Drone;
-    // Central body
-    const body = new THREE.Mesh(droneBodyGeo, matDroneBody);
-    d.add(body);
-    // Two crossed arms in XZ plane
-    const armA = new THREE.Mesh(droneArmGeo, matDark);
-    d.add(armA);
-    const armB = new THREE.Mesh(droneArmGeo, matDark);
-    armB.rotation.y = Math.PI / 2;
-    d.add(armB);
-    // Four rotors at the tips of the arms (arm length 0.32 -> tip at 0.16)
-    const tipOffsets: Array<[number, number]> = [[0.16, 0], [-0.16, 0], [0, 0.16], [0, -0.16]];
-    const rotors: THREE.Mesh[] = [];
-    for (const [rx, rz] of tipOffsets) {
-      const r = new THREE.Mesh(droneRotorGeo, matRotor);
-      r.position.set(rx, 0.02, rz);
-      d.add(r);
-      rotors.push(r);
-    }
-    // Pizza-box payload slung underneath
-    const payload = new THREE.Mesh(dronePayloadGeo, matRed);
-    payload.position.set(0, -0.05, 0);
-    d.add(payload);
+    onModelReady("drone", (clone) => {
+      clone.scale.setScalar(0.4);
+      d.add(clone);
+    });
     d.userData.angle = Math.random() * Math.PI * 2;
     d.userData.radius = 1.8 + Math.random() * 1.2;
     d.userData.speed = 0.6 + Math.random() * 0.5;
     d.userData.tilt = Math.random() * 0.6 - 0.3;
-    d.userData.rotors = rotors;
     cosmicLayer.add(d);
     drones.push(d);
   }
@@ -521,11 +579,14 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
 
   // ---- Camera positions per phase ----
   const camTargets: Record<Phase, { pos: THREE.Vector3; look: THREE.Vector3 }> = {
-    shop:    { pos: new THREE.Vector3(0, 1.6, 4.2), look: new THREE.Vector3(0, 0.8, 0) },
-    local:   { pos: new THREE.Vector3(2.4, 2.4, 5.2), look: new THREE.Vector3(0, 0.8, 0) },
-    cosmic:  { pos: new THREE.Vector3(0, 3, 11),    look: new THREE.Vector3(0, 0, 0) },
-    final:   { pos: new THREE.Vector3(0, 0, 7),     look: new THREE.Vector3(0, 0, 0) },
-    credits: { pos: new THREE.Vector3(0, 0, 5),     look: new THREE.Vector3(0, 0, 0) },
+    shop:       { pos: new THREE.Vector3(0, 1.6, 4.2),  look: new THREE.Vector3(0, 0.8, 0) },
+    local:      { pos: new THREE.Vector3(2.4, 2.4, 5.2), look: new THREE.Vector3(0, 0.8, 0) },
+    cosmic:     { pos: new THREE.Vector3(0, 3, 11),     look: new THREE.Vector3(0, 0, 0) },
+    final:      { pos: new THREE.Vector3(0, 0, 7),      look: new THREE.Vector3(0, 0, 0) },
+    credits:    { pos: new THREE.Vector3(0, 0, 5),      look: new THREE.Vector3(0, 0, 0) },
+    multiverse: { pos: new THREE.Vector3(2, 1, 9),      look: new THREE.Vector3(0, 0, 0) },
+    timeloop:   { pos: new THREE.Vector3(-2, 1.5, 8),   look: new THREE.Vector3(0, 0, 0) },
+    empire:     { pos: new THREE.Vector3(0, 4, 14),     look: new THREE.Vector3(0, 0, 0) },
   };
 
   let currentPhase: Phase = "shop";
@@ -559,10 +620,6 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       shopLayer.remove(c.group);
     }
 
-    // toppings lift slightly with cheese/dough upgrades (cosmetic)
-    const lift = (s.upgradesOwned.cheese ? 0.015 : 0) + (s.upgradesOwned.dough ? 0.01 : 0);
-    toppings.position.y = lift;
-
     // extra ovens
     const desiredOvens = 1 + (s.upgradesOwned.kitchen ? 1 : 0) + (s.upgradesOwned.bots ? 2 : 0);
     while (ovens.length < desiredOvens) {
@@ -575,7 +632,9 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     while (ovens.length > desiredOvens) {
       const o = ovens.pop()!;
       shopLayer.remove(o);
-      o.geometry.dispose();
+      o.traverse((n) => {
+        if ((n as THREE.Mesh).isMesh) (n as THREE.Mesh).geometry.dispose();
+      });
       const p = ovenProps.pop()!;
       disposeOvenProps(p);
     }
@@ -606,7 +665,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // phase visibility
     shopLayer.visible = s.phase === "shop" || s.phase === "local";
     localLayer.visible = s.phase === "shop" || s.phase === "local";
-    cosmicLayer.visible = s.phase === "cosmic";
+    cosmicLayer.visible = s.phase === "cosmic" || s.phase === "multiverse" || s.phase === "timeloop" || s.phase === "empire";
     finalLayer.visible = s.phase === "final" || s.phase === "credits";
 
     if (s.phase !== prevPhase) {
@@ -652,6 +711,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     const w = mount.clientWidth;
     const h = mount.clientHeight;
     renderer.setSize(w, h);
+    composer?.setSize(w, h);
+    bloomPass?.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   };
@@ -682,11 +743,6 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     // Pizza spin
     pizza.rotation.y = elapsed * 0.4;
     pizza2.rotation.y = -elapsed * 0.4;
-    // Oven flicker
-    for (const o of ovens) {
-      const mat = o.material as THREE.MeshStandardMaterial;
-      mat.emissiveIntensity = 0.35 + Math.sin(elapsed * 6 + o.position.x) * 0.1;
-    }
 
     // ---- Upgrade-driven prop animations ----
     // Dough ball: spin + bob
@@ -768,6 +824,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     if (cosmicLayer.visible) {
       earth.rotation.y = elapsed * 0.15;
       stars.rotation.y = elapsed * 0.005;
+      wormhole.rotation.z = elapsed * 0.6;
       for (const p of planets) {
         p.userData.angle += dt * p.userData.speed;
         const a = p.userData.angle;
@@ -782,7 +839,6 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         const tilt = d.userData.tilt;
         d.position.set(Math.cos(a) * r, tilt + Math.sin(a * 2) * 0.2, Math.sin(a) * r);
         d.rotation.y = -a + Math.PI / 2;
-        for (const rot of d.userData.rotors) rot.rotation.y += dt * 30;
       }
     }
 
@@ -792,7 +848,11 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       sunGlow.intensity = 3 + Math.sin(elapsed * 2) * 0.6;
     }
 
-    renderer.render(scene, camera);
+    if (composer) {
+      composer.render();
+    } else {
+      renderer.render(scene, camera);
+    }
   });
 
   return { canvas: renderer.domElement };
