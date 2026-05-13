@@ -639,6 +639,7 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     progress: 0, duration: 6, dir: 1,
   };
   let nextBirdAt = 10 + Math.random() * 10;
+  const birdColors = [0x1a1a1a, 0x3a2a18, 0x222a20, 0x2a1c0f];
   function spawnBird(): void {
     birdState.dir = Math.random() < 0.5 ? 1 : -1;
     birdState.startX = birdState.dir > 0 ? -12 : 12;
@@ -650,6 +651,8 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     birdState.active = true;
     birdGroup.visible = true;
     birdGroup.rotation.y = birdState.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+    // Cycle the bird color per flyby.
+    birdMat.color.setHex(birdColors[Math.floor(Math.random() * birdColors.length)]);
   }
 
   // ---- Atmospheric dust motes ----
