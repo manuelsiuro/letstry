@@ -186,6 +186,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     color: 0x4a5a8a, emissive: 0x4a5a8a, emissiveIntensity: 0.4, fog: false,
     side: THREE.DoubleSide,
   });
+  // Track a small subset of windows that will flicker on/off so the city
+  // doesn't feel like a static painting.
+  type BlinkWindow = { mesh: THREE.Mesh; phase: number; period: number; threshold: number };
+  const blinkWindows: BlinkWindow[] = [];
   const buildingCount = 22;
   const ringRadius = 13;
   for (let i = 0; i < buildingCount; i++) {
@@ -212,7 +216,12 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       for (let r = 1; r < rows - 1; r++) {
         if (Math.random() > 0.55) continue;
         const lit = Math.random() > 0.3;
-        const w = new THREE.Mesh(windowGeo, lit ? windowMatLit : windowMatDim);
+        // Each blinker gets its own clone of the lit material so we can
+        // toggle its emissiveIntensity independently. Static windows reuse
+        // the shared material to save memory.
+        const blinks = lit && Math.random() < 0.35;
+        const mat = blinks ? windowMatLit.clone() : (lit ? windowMatLit : windowMatDim);
+        const w = new THREE.Mesh(windowGeo, mat);
         const localX = (c + 0.5) * colStep - width / 2;
         const localY = (r + 0.5) * rowStep - height / 2;
         // Inward-facing side. The building's rotation maps local -Z toward
@@ -220,6 +229,16 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
         w.position.set(localX, localY, -depth / 2 - 0.02);
         w.rotation.y = Math.PI; // flip so the lit side points outward
         b.add(w);
+        if (blinks) {
+          blinkWindows.push({
+            mesh: w,
+            phase: Math.random() * Math.PI * 2,
+            period: 4 + Math.random() * 6, // 4-10s on/off cycle
+            // threshold close to ±1 → off for most of the cycle (lights "on"
+            // is the normal state, blink toggles dark briefly)
+            threshold: 0.5 + Math.random() * 0.4,
+          });
+        }
       }
     }
     // Optional rooftop "antenna" or sign for variety
@@ -1475,6 +1494,16 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       const base = p.flavor === "make" ? 0.6 : 0.5;
       const growth = p.flavor === "make" ? 1 + t * 1.8 : 1 + t * 0.4;
       p.sprite.scale.setScalar(base * growth);
+    }
+
+    // City window flicker — only when the shop layer is actually visible.
+    if (shopLayer.visible) {
+      for (const bw of blinkWindows) {
+        const v = Math.sin(elapsed * (Math.PI * 2 / bw.period) + bw.phase);
+        const on = v > -bw.threshold; // "off" only when sine dips below
+        const mat = bw.mesh.material as THREE.MeshStandardMaterial;
+        mat.emissiveIntensity = on ? 1.6 : 0.05;
+      }
     }
 
     // Neon pulse
