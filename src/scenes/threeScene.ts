@@ -3,6 +3,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
@@ -47,6 +48,37 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
       0.7,  // threshold
     );
     composer.addPass(bloomPass);
+    // Vignette — subtle radial darkening pulls the eye toward the action.
+    const vignetteShader = {
+      uniforms: {
+        tDiffuse: { value: null },
+        strength: { value: 0.5 },
+        inner: { value: 0.35 },
+        outer: { value: 0.9 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform float strength;
+        uniform float inner;
+        uniform float outer;
+        varying vec2 vUv;
+        void main() {
+          vec4 color = texture2D(tDiffuse, vUv);
+          float d = length(vUv - 0.5) * 1.414; // 0..1 across diag
+          float darken = strength * smoothstep(inner, outer, d);
+          color.rgb *= (1.0 - darken);
+          gl_FragColor = color;
+        }
+      `,
+    };
+    composer.addPass(new ShaderPass(vignetteShader));
     composer.addPass(new OutputPass());
   }
 
