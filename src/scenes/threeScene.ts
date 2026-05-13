@@ -2342,8 +2342,10 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
   });
   for (let i = 0; i < 9; i++) {
     const f = new THREE.Group();
+    // Per-ship scale — flagship leaders bigger than wing escorts.
+    const fleetScale = 0.6 + Math.random() * 0.25;
     onModelReady("drone", (clone) => {
-      clone.scale.setScalar(0.7);
+      clone.scale.setScalar(fleetScale);
       f.add(clone);
     });
     // Small red taillight behind each fleet drone — empire fleet now glows.
