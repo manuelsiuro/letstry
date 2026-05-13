@@ -2568,11 +2568,13 @@ export function startThreeScene(mount: HTMLElement): ThreeScene {
     m.add(moonHalo);
     m.scale.setScalar(moonScale);
     finalLayer.add(m);
+    // 50/50 direction so half the moons orbit clockwise, half counter.
+    const orbitDir = Math.random() < 0.5 ? 1 : -1;
     pizzaMoons.push({
       group: m,
       angle: (i / 4) * Math.PI * 2,
       radius: 3.4 + i * 0.9,
-      speed: 0.6 - i * 0.08,
+      speed: (0.6 - i * 0.08) * orbitDir,
       tilt: (Math.random() - 0.5) * 0.6,
     });
   }
